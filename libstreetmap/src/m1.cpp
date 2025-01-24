@@ -36,49 +36,6 @@
 // ".streets" to ".osm" in the map_streets_database_filename to get the proper
 // name.
 
-//function declared
-//Returns the length of the given street segment in meters
-//Speed Requirement --> moderate
-double findStreetSegmentLength(StreetSegmentIdx street_segment_id){
-    return 0.0;
-}
-
-//Returns the travel time to drive a street segment in seconds
-//(time = distance / speed_limit)
-//Speed Requirement --> High
-double findStreetSegmentTravelTime(StreetSegmentIdx street_segment_id){
-    return 0.0;
-}
-
-//Returns the nearest intersection to the given position
-//Speed Requirement --> none
-IntersectionIdx findClosestIntersection(LatLon my_posotion){
-    return IntersectionIdx(-1);
-}
-LatLonBounds findStreetBoundingBox (StreetIdx street_id){
-    return LatLonBounds();
-}
-
-double findStreetSegmentTurnAngle(StreetSegmentIdx src_street_segment_id, StreetSegmentIdx dst_street_id){
-    return 0.0;
-}
-// Returns the street segments for the given intersection
-// Speed Requirement --> high
-std::vector<StreetSegmentIdx> findStreetSegmentsOfIntersection(IntersectionIdx intersetion_id){
-    return std::vector<StreetSegmentIdx>();
-}
-
-//Returns tehe street names at the given intersetion (includes duplicate street names in returned vector)
-//Speed Requiremnent --> high
-std::vector<std::string> findStreetSegmentNamesOfIntersection(IntersectionIdx intersection_id){
-    return std::vector<std::string>();
-}
-
-std::vector<IntersectionIdx> findAdjacentIntersections(IntersectionIdx intersetion_id){
-    return std::vector<IntersectionIdx>();
-}
-
-
 bool loadMap(std::string map_streets_database_filename) {
     bool load_successful = false; //Indicates whether the map has loaded 
                                   //successfully
@@ -98,5 +55,97 @@ bool loadMap(std::string map_streets_database_filename) {
 
 void closeMap() {
     //Clean-up your map related data structures here
-    
+}
+
+// Returns the distance between two (latitude, longitude) coordinates in meters.
+// Speed Requirement --> moderate
+double findDistanceBetweenTwoPoints(LatLon point_1, LatLon point_2){
+    return 0.0;
+}
+
+//Returns the length of the given street segment in meters
+//Speed Requirement --> moderate
+double findStreetSegmentLength(StreetSegmentIdx street_segment_id){
+    return 0.0;
+}
+
+//Returns the travel time to drive a street segment in seconds
+//(time = distance / speed_limit)
+//Speed Requirement --> High
+double findStreetSegmentTravelTime(StreetSegmentIdx street_segment_id){
+    return 0.0;
+}
+
+double findStreetSegmentTurnAngle(StreetSegmentIdx src_street_segment_id, StreetSegmentIdx dst_street_id){
+    return 0.0;
+}
+
+double findStreetLength(StreetIdx street_id){
+    return 0.0;
+}
+
+double findFeatureArea(FeatureIdx feature_id){
+    return 0.0;
+}
+
+double findWayLength(OSMID way_id){
+    return 0.0;
+}
+
+LatLonBounds findStreetBoundingBox(StreetIdx street_id){
+    return LatLonBounds();
+}
+
+POIIdx findClosestPOI(LatLon my_position, std::string poi_type){
+    return POIIdx();
+}
+
+std::vector<IntersectionIdx> findAdjacentIntersections(IntersectionIdx intersection_id){
+    return std::vector<IntersectionIdx>();
+}
+
+IntersectionIdx findClosestIntersection(LatLon my_position){
+    return IntersectionIdx(-1);
+}
+
+std::vector<StreetSegmentIdx> findStreetSegmentsOfIntersection(IntersectionIdx intersection_id){
+    return std::vector<StreetSegmentIdx>();
+}
+
+// Returns all intersections along the given street.
+// There should be no duplicate intersections in the returned vector.
+// Speed Requirement --> high
+std::vector<IntersectionIdx> findIntersectionsOfStreet(StreetIdx street_id){
+    return std::vector<IntersectionIdx>();
+}
+
+// Return all intersection ids at which the two given streets intersect.
+// This function will typically return one intersection id for streets that
+// intersect and a length 0 vector for streets that do not. For unusual curved
+// streets it is possible to have more than one intersection at which two
+// streets cross.
+// There should be no duplicate intersections in the returned vector.
+// Speed Requirement --> high
+std::vector<IntersectionIdx> findIntersectionsOfTwoStreets(std::pair<StreetIdx, StreetIdx> street_ids){
+    return std::vector<IntersectionIdx>();
+}
+
+// Returns all street ids corresponding to street names that start with the
+// given prefix.
+// The function should be case-insensitive to the street prefix.
+// The function should ignore spaces.
+// For example, both "bloor " and "BloOrst" are prefixes to
+// "Bloor Street East".
+// If no street names match the given prefix, this routine returns an empty
+// (length 0) vector.
+// You can choose what to return if the street prefix passed in is an empty
+// (length 0) string, but your program must not crash if street_prefix is a
+// length 0 string.
+// Speed Requirement --> high
+std::vector<StreetIdx> findStreetIdsFromPartialStreetName(std::string street_prefix){
+    return std::vector<StreetIdx>();
+}
+
+std::string getOSMNodeTagValue(OSMID osm_id, std::string key){
+    return std::string();
 }
