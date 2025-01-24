@@ -35,6 +35,50 @@
 // name of the ".osm.bin" file that matches your map -- just change 
 // ".streets" to ".osm" in the map_streets_database_filename to get the proper
 // name.
+
+//function declared
+//Returns the length of the given street segment in meters
+//Speed Requirement --> moderate
+double findStreetSegmentLength(StreetSegmentIdx street_segment_id){
+    return 0.0;
+}
+
+//Returns the travel time to drive a street segment in seconds
+//(time = distance / speed_limit)
+//Speed Requirement --> High
+double findStreetSegmentTravelTime(StreetSegmentIdx street_segment_id){
+    return 0.0;
+}
+
+//Returns the nearest intersection to the given position
+//Speed Requirement --> none
+IntersectionIdx findClosestIntersection(LatLon my_posotion){
+    return IntersectionIdx(-1);
+}
+LatLonBounds findStreetBoundingBox (StreetIdx street_id){
+    return LatLonBounds();
+}
+
+double findStreetSegmentTurnAngle(StreetSegmentIdx src_street_segment_id, StreetSegmentIdx dst_street_id){
+    return 0.0;
+}
+// Returns the street segments for the given intersection
+// Speed Requirement --> high
+std::vector<StreetSegmentIdx> findStreetSegmentsOfIntersection(IntersectionIdx intersetion_id){
+    return std::vector<StreetSegmentIdx>();
+}
+
+//Returns tehe street names at the given intersetion (includes duplicate street names in returned vector)
+//Speed Requiremnent --> high
+std::vector<std::string> findStreetSegmentNamesOfIntersection(IntersectionIdx intersection_id){
+    return std::vector<std::string>();
+}
+
+std::vector<IntersectionIdx> findAdjacentIntersections(IntersectionIdx intersetion_id){
+    return std::vector<IntersectionIdx>();
+}
+
+
 bool loadMap(std::string map_streets_database_filename) {
     bool load_successful = false; //Indicates whether the map has loaded 
                                   //successfully
@@ -46,7 +90,6 @@ bool loadMap(std::string map_streets_database_filename) {
     //
 
     
-
     load_successful = true; //Make sure this is updated to reflect whether
                             //loading the map succeeded or failed
 
