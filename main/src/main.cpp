@@ -18,6 +18,7 @@
  * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
  * SOFTWARE.
  */
+// Created by Student Zhuoyang Li, Zhengyang Wang, Yining Wang
 #include <iostream>
 #include <string>
 
