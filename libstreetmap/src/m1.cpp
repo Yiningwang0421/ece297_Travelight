@@ -21,7 +21,12 @@
 #include <iostream>
 #include "m1.h"
 #include "StreetsDatabaseAPI.h"
+<<<<<<< HEAD
 #include "OSMDatabaseAPI.h"
+=======
+#include "math.h"
+
+>>>>>>> 2a9c68b (Implemented the find distance between two points function)
 
 // loadMap will be called with the name of the file that stores the "layer-2"
 // map data accessed through StreetsDatabaseAPI: the street and intersection 
@@ -93,12 +98,35 @@ void closeMap() {
 // Returns the distance between two (latitude, longitude) coordinates in meters.
 // Speed Requirement --> moderate
 double findDistanceBetweenTwoPoints(LatLon point_1, LatLon point_2){
-    return 0.0;
+
+    
+    // Convert latitude and longitude from degrees to radians
+    double lat1 = point_1.latitude() * kDegreeToRadian;
+    double lon1 = point_1.longitude() * kDegreeToRadian;
+    double lat2 = point_2.latitude() * kDegreeToRadian;
+    double lon2 = point_2.longitude() * kDegreeToRadian;
+
+    // Compute the average latitude
+    double lat_avg = (lat1 + lat2) / 2.0;
+
+    // Compute x and y distances
+    double x = kEarthRadiusInMeters * (lon2 - lon1) * std::cos(lat_avg);
+    double y = kEarthRadiusInMeters * (lat2 - lat1);
+
+    // Compute the distance using Pythagoras' theorem
+    return std::sqrt(x * x + y * y);
 }
+
+
 
 //Returns the length of the given street segment in meters
 //Speed Requirement --> moderate
 double findStreetSegmentLength(StreetSegmentIdx street_segment_id){
+    // Get street segment 
+    StreetSegmentInfo streetSegment = getStreetSegmentInfo(street_segment_id);
+
+    // Get the Start Point
+    LatLon startPoint = getIntersectionPosition(streetSegment.from);
     return 0.0;
 }
 
