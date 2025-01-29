@@ -36,7 +36,9 @@
 // ".streets" to ".osm" in the map_streets_database_filename to get the proper
 // name.
 
-std::vector<std::vector<StreetSegmentIdx>> intersection_street_segments;
+//global variables for function usage
+std::vector<std::vector<StreetSegmentIdx>> intersection_street_segments; 
+std::vector<std::vector<IntersectionIdx>> adjacent_street_segments;
 bool loadMap(std::string map_streets_database_filename) {
     bool load_successful = loadStreetsDatabaseBIN(map_streets_database_filename); //Indicates whether the map has loaded 
                                   //successfully
@@ -45,16 +47,36 @@ bool loadMap(std::string map_streets_database_filename) {
     //
     // Load your map related data structures here.
     //
-    // intersection_street_segments.clear();
+    // findStreetSegmentsOfIntersection()
     intersection_street_segments.resize(getNumIntersections());
+    adjacent_street_segments.resize(getNumIntersections());
+
     for(IntersectionIdx intersection_id = 0; intersection_id < getNumIntersections(); intersection_id++){
         int segments = getNumIntersectionStreetSegment(intersection_id);
+
         intersection_street_segments[intersection_id].reserve(segments);
         for(int i = 0; i < segments; i++){
             StreetSegmentIdx ss_id = getIntersectionStreetSegment(intersection_id, i);
             intersection_street_segments[intersection_id].push_back(ss_id);
+            StreetSegmentInfo ss_info = getStreetSegmentInfo(ss_id); // get each street's info
+            IntersectionIdx adjacent = 0;
+            if(ss_info.from == intersection_id){
+                adjacent = ss_info.to;
+            }
+            else if(ss_info.to == intersection_id && !(ss_info.oneWay)){
+                adjacent = ss_info.from;
+            }
+            if(adjacent != 0 && std::find(adjacent_street_segments[intersection_id].begin(), 
+                                            adjacent_street_segments[intersection_id].end(),
+                                            adjacent) ==  adjacent_street_segments[intersection_id].end()){
+                adjacent_street_segments[intersection_id].push_back(adjacent);
+            }
         }
     }
+
+    // findAdjacentIntersections
+
+
 
     load_successful = true; //Make sure this is updated to reflect whether
                             //loading the map succeeded or failed
@@ -112,21 +134,12 @@ POIIdx findClosestPOI(LatLon my_position, std::string poi_type){
 }
 
 std::vector<IntersectionIdx> findAdjacentIntersections(IntersectionIdx intersection_id){
-    return std::vector<IntersectionIdx>();
+    return adjacent_street_segments[intersection_id];
 }
 
 IntersectionIdx findClosestIntersection(LatLon my_position){
     return IntersectionIdx(-1);
 }
-
-// std::vector<StreetSegmentIdx> findStreetSegmentsOfIntersection(IntersectionIdx intersection_id){
-//     std::vector<StreetSegmentIdx> ss_idxs;
-//     for(int i = 0; i < getNumIntersectionStreetSegment(intersection_id); i++){
-//         int ss_id = getIntersectionStreetSegment(intersection_id, i);
-//         ss_idxs.push_back(ss_id);
-//     }
-//     return ss_idxs;
-// }
 
 std::vector<StreetSegmentIdx> findStreetSegmentsOfIntersection (IntersectionIdx intersection_id) {
     return intersection_street_segments[intersection_id];
