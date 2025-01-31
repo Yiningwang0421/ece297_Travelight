@@ -40,6 +40,13 @@
 // ".streets" to ".osm" in the map_streets_database_filename to get the proper
 // name.
 
+
+// Global nested vector: Index is streetId, value is a vector of segment IDs
+std::vector<std::vector<StreetSegmentIdx>> streetSegmentVector;
+void preprocessStreetSegments(); 
+
+
+
 //global variables for function usage
 std::vector<std::vector<StreetSegmentIdx>> intersection_street_segments; 
 std::vector<std::vector<IntersectionIdx>> adjacent_street_segments;
@@ -233,4 +240,17 @@ std::vector<StreetIdx> findStreetIdsFromPartialStreetName(std::string street_pre
 
 std::string getOSMNodeTagValue(OSMID osm_id, std::string key){
     return std::string();
+}
+
+
+void preprocessStreetSegments() {
+    StreetSegmentIdx numOfStreets = getNumStreets();
+    
+    streetSegmentVector.resize(numOfStreets);  
+
+    // Loop through all street segments and store them in the corresponding street
+    for (StreetSegmentIdx segmentId = 0; segmentId < getNumStreetSegments(); segmentId++) {
+        StreetSegmentInfo segmentInfo = getStreetSegmentInfo(segmentId);
+        streetSegmentVector[segmentInfo.streetID].push_back(segmentId);
+    }
 }
