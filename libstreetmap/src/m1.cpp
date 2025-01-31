@@ -21,8 +21,12 @@
 #include <iostream>
 #include "m1.h"
 #include "StreetsDatabaseAPI.h"
+
 #include "OSMDatabaseAPI.h"
 #include "math.h"
+
+
+#include <vector>
 
 // loadMap will be called with the name of the file that stores the "layer-2"
 // map data accessed through StreetsDatabaseAPI: the street and intersection 
@@ -94,37 +98,89 @@ void closeMap() {
 // Returns the distance between two (latitude, longitude) coordinates in meters.
 // Speed Requirement --> moderate
 double findDistanceBetweenTwoPoints(LatLon point_1, LatLon point_2){
-    return 0.0;
+
+    
+    // Convert latitude and longitude from degrees to radians
+    double lat1 = point_1.latitude() * kDegreeToRadian;
+    double lon1 = point_1.longitude() * kDegreeToRadian;
+    double lat2 = point_2.latitude() * kDegreeToRadian;
+    double lon2 = point_2.longitude() * kDegreeToRadian;
+
+    // Compute the average latitude
+    double lat_avg = (lat1 + lat2) / 2.0;
+
+    // Compute x and y distances
+    double x = kEarthRadiusInMeters * (lon2 - lon1) * std::cos(lat_avg);
+    double y = kEarthRadiusInMeters * (lat2 - lat1);
+
+    // Compute the distance using Pythagoras' theorem
+    return std::sqrt(x * x + y * y);
 }
+
+
 
 //Returns the length of the given street segment in meters
 //Speed Requirement --> moderate
 double findStreetSegmentLength(StreetSegmentIdx street_segment_id){
-    return 0.0;
+    
+    StreetSegmentInfo streetSegment = getStreetSegmentInfo(street_segment_id);
+
+    // Get the Start Point
+    LatLon startPoint = getIntersectionPosition(streetSegment.from);
+
+    double totalLength = 0.0;
+
+    // Iterate through curve points
+    for (int i = 0; i < streetSegment.numCurvePoints; i++) {
+        LatLon curvePoint = getStreetSegmentCurvePoint(street_segment_id, i);
+        totalLength = totalLength + findDistanceBetweenTwoPoints(startPoint, curvePoint);
+        startPoint = curvePoint;  
+    }
+
+    // Add final segment (last curve point → to intersection)
+    LatLon endPoint = getIntersectionPosition(streetSegment.to);
+    totalLength = totalLength + findDistanceBetweenTwoPoints(startPoint, endPoint);
+
+    return totalLength;  
+
 }
 
 //Returns the travel time to drive a street segment in seconds
 //(time = distance / speed_limit)
 //Speed Requirement --> High
-double findStreetSegmentTravelTime(StreetSegmentIdx street_segment_id){
-    return 0.0;
-}
+// double findStreetSegmentTravelTime(StreetSegmentIdx street_segment_id){
+    
+//     StreetSegmentInfo streetSegment = getStreetSegmentInfo(street_segment_id);
+//     double segmentLength = findStreetSegmentLength(street_segment_id);
+
+//     double speedLimit = segmentLength.speedLimit;
+
+//     if (speedLimit <= 0) {
+//         return 0.0;
+//     }
+
+//     return segmentLength / speedLimit;  
+// }
 
 //helper function for finding non straight street
 LatLon getClosestSegment(StreetSegmentIdx segmentID, IntersectionIdx intersection){
     StreetSegmentInfo segmentInfo = getStreetSegmentInfo(segmentID);
     if(segmentInfo.numCurvePoints > 0){ // curved street
-        return getStreetSegmentCurvePoint(segmentID, segmentInfo.numCurvePoints - 1);
+        for(int pt = 0; pt < segmentInfo.numCurvePoints - 1; pt++){
+            LatLon curvePtPos = getStreetSegmentCurvePoint(segmentID, pt);
+            if(segmentInfo.to() == curvePtPos.latitude()){
+                return segmentID 
+            }
     }
-
+    //straight street
     if(segmentInfo.to == intersection){
         return getIntersectionPosition(segmentInfo.from);
     }
     else{
         return getIntersectionPosition(segmentInfo.to);
     }
-
 }
+
 double findStreetSegmentTurnAngle(StreetSegmentIdx src_street_segment_id, StreetSegmentIdx dst_street_id){
     StreetSegmentInfo src_info = getStreetSegmentInfo(src_street_segment_id);
     StreetSegmentInfo dst_info = getStreetSegmentInfo(dst_street_id);
@@ -156,11 +212,21 @@ double findStreetSegmentTurnAngle(StreetSegmentIdx src_street_segment_id, Street
     double c = findDistanceBetweenTwoPoints(srcPT, dstPT);
     double turnAngle = acos((a*a + b*b - c*c) / (2*a*b));
     return turnAngle;
+
 }
 
-double findStreetLength(StreetIdx street_id){
-    return 0.0;
-}
+// double findStreetLength(StreetIdx street_id){
+//     if (streetSegmentMap.count(streetId)) {
+//         std::vector<int> segments = streetSegmentMap[streetId];  
+
+//         // Loop through segments and sum their lengths
+//         for (int i = 0; i < (int)segments.size(); i++) {
+//             totalLength += findStreetSegmentLength(segments[i]);
+//         }
+//     }
+
+//     return totalLength; 
+// }
 
 double findFeatureArea(FeatureIdx feature_id){
     return 0.0;
