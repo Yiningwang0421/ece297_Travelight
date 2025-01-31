@@ -24,7 +24,7 @@
 
 #include "OSMDatabaseAPI.h"
 
-
+#include "math.h"
 #include <vector>
 
 // loadMap will be called with the name of the file that stores the "layer-2"
@@ -152,7 +152,7 @@ double findStreetSegmentTravelTime(StreetSegmentIdx street_segment_id){
     StreetSegmentInfo streetSegment = getStreetSegmentInfo(street_segment_id);
     double segmentLength = findStreetSegmentLength(street_segment_id);
 
-    double speedLimit = segmentLength.speedLimit;
+    double speedLimit = streetSegment.speedLimit;
 
     if (speedLimit <= 0) {
         return 0.0;
@@ -166,16 +166,7 @@ return 0.0;
 }
 
 double findStreetLength(StreetIdx street_id){
-    if (streetSegmentMap.count(streetId)) {
-        std::vector<int> segments = streetSegmentMap[streetId];  
-
-        // Loop through segments and sum their lengths
-        for (int i = 0; i < (int)segments.size(); i++) {
-            totalLength += findStreetSegmentLength(segments[i]);
-        }
-    }
-
-    return totalLength; 
+    return 0.0;
 }
 
 double findFeatureArea(FeatureIdx feature_id){
