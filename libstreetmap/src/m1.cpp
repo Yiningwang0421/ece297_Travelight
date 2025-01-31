@@ -22,6 +22,7 @@
 #include "m1.h"
 #include "StreetsDatabaseAPI.h"
 #include "OSMDatabaseAPI.h"
+#include "math.h"
 
 // loadMap will be called with the name of the file that stores the "layer-2"
 // map data accessed through StreetsDatabaseAPI: the street and intersection 
@@ -109,8 +110,52 @@ double findStreetSegmentTravelTime(StreetSegmentIdx street_segment_id){
     return 0.0;
 }
 
+//helper function for finding non straight street
+LatLon getClosestSegment(StreetSegmentIdx segmentID, IntersectionIdx intersection){
+    StreetSegmentInfo segmentInfo = getStreetSegmentInfo(segmentID);
+    if(segmentInfo.numCurvePoints > 0){ // curved street
+        return getStreetSegmentCurvePoint(segmentID, segmentInfo.numCurvePoints - 1);
+    }
+
+    if(segmentInfo.to == intersection){
+        return getIntersectionPosition(segmentInfo.from);
+    }
+    else{
+        return getIntersectionPosition(segmentInfo.to);
+    }
+
+}
 double findStreetSegmentTurnAngle(StreetSegmentIdx src_street_segment_id, StreetSegmentIdx dst_street_id){
-    return 0.0;
+    StreetSegmentInfo src_info = getStreetSegmentInfo(src_street_segment_id);
+    StreetSegmentInfo dst_info = getStreetSegmentInfo(dst_street_id);
+    IntersectionIdx intersection = -1;
+    // checking intersection category
+    if(src_info.to == dst_info.from){
+        intersection = src_info.to;
+    }
+    else if(src_info.from == dst_info.to){
+        intersection = src_info.from;
+    }
+    else if(src_info.to == dst_info.to){
+        intersection = src_info.to;
+    }
+    else if(src_info.from == dst_info.from){
+        intersection = src_info.from;
+    }
+    else{
+        return NO_ANGLE;
+    }
+
+    //finding each street segment direction
+    LatLon intersectionPos = getIntersectionPosition(intersection);
+    LatLon srcPT = getClosestSegment(src_street_segment_id, intersection);
+    LatLon dstPT = getClosestSegment(dst_street_id,  intersection);
+    //finding directional vector for each streetsegment
+    double a = findDistanceBetweenTwoPoints(intersectionPos, srcPT);
+    double b = findDistanceBetweenTwoPoints(intersectionPos, dstPT);
+    double c = findDistanceBetweenTwoPoints(srcPT, dstPT);
+    double turnAngle = acos((a*a + b*b - c*c) / (2*a*b));
+    return turnAngle;
 }
 
 double findStreetLength(StreetIdx street_id){
