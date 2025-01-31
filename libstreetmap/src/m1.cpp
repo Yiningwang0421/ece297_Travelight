@@ -26,6 +26,7 @@
 
 #include "math.h"
 #include <vector>
+#include <unordered_set>
 
 // loadMap will be called with the name of the file that stores the "layer-2"
 // map data accessed through StreetsDatabaseAPI: the street and intersection 
@@ -51,6 +52,8 @@ void preprocessStreetSegments();
 std::vector<std::vector<StreetSegmentIdx>> intersection_street_segments; 
 std::vector<std::vector<IntersectionIdx>> adjacent_street_segments;
 bool loadMap(std::string map_streets_database_filename) {
+
+
     bool load_successful = loadStreetsDatabaseBIN(map_streets_database_filename); //Indicates whether the map has loaded 
                                   //successfully
     std::cout << "loadMap: " << map_streets_database_filename << std::endl;
@@ -92,6 +95,10 @@ bool loadMap(std::string map_streets_database_filename) {
     load_successful = true; //Make sure this is updated to reflect whether
                             //loading the map succeeded or failed
 
+    preprocessStreetSegments(); 
+
+
+
     return load_successful;
 }
 
@@ -99,6 +106,7 @@ void closeMap() {
     //Clean-up your map related data structures here
     intersection_street_segments.clear();
     closeStreetDatabase();
+    streetSegmentVector.clear();
 }
 
 // Returns the distance between two (latitude, longitude) coordinates in meters.
@@ -131,10 +139,12 @@ double findStreetSegmentLength(StreetSegmentIdx street_segment_id){
     
     StreetSegmentInfo streetSegment = getStreetSegmentInfo(street_segment_id);
 
+
     // Get the Start Point
     LatLon startPoint = getIntersectionPosition(streetSegment.from);
 
     double totalLength = 0.0;
+    
 
     // Iterate through curve points
     for (int i = 0; i < streetSegment.numCurvePoints; i++) {
@@ -173,7 +183,19 @@ return 0.0;
 }
 
 double findStreetLength(StreetIdx street_id){
-    return 0.0;
+
+    double totalLength = 0.0;
+    if (street_id >= 0 && street_id < streetSegmentVector.size())
+    {
+        
+        const std::vector<StreetSegmentIdx>& segmentsOfStreetId = streetSegmentVector[street_id];
+        for (StreetSegmentIdx i = 0; i < segmentsOfStreetId.size(); i++) {
+        totalLength += findStreetSegmentLength(segmentsOfStreetId[i]);
+        
+    }
+}
+    
+    return totalLength;
 }
 
 double findFeatureArea(FeatureIdx feature_id){
@@ -244,12 +266,11 @@ std::string getOSMNodeTagValue(OSMID osm_id, std::string key){
 
 
 void preprocessStreetSegments() {
-    StreetSegmentIdx numOfStreets = getNumStreets();
-    
-    streetSegmentVector.resize(numOfStreets);  
+    int numStreets = getNumStreets();
+    streetSegmentVector.resize(numStreets);  
 
     // Loop through all street segments and store them in the corresponding street
-    for (StreetSegmentIdx segmentId = 0; segmentId < getNumStreetSegments(); segmentId++) {
+    for (int segmentId = 0; segmentId < getNumStreetSegments(); segmentId++) {
         StreetSegmentInfo segmentInfo = getStreetSegmentInfo(segmentId);
         streetSegmentVector[segmentInfo.streetID].push_back(segmentId);
     }
