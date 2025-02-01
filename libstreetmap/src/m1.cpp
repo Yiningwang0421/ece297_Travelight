@@ -56,7 +56,9 @@ bool loadMap(std::string map_streets_database_filename) {
     bool load_successful = loadStreetsDatabaseBIN(map_streets_database_filename); //Indicates whether the map has loaded 
                                   //successfully
     std::cout << "loadMap: " << map_streets_database_filename << std::endl;
-
+    if(load_successful == false){
+        return false;
+    }
     //
     // Load your map related data structures here.
     //
@@ -93,16 +95,12 @@ bool loadMap(std::string map_streets_database_filename) {
         }
     }
 
-    // findAdjacentIntersections
-
 
 
     load_successful = true; //Make sure this is updated to reflect whether
                             //loading the map succeeded or failed
 
     preprocessStreetSegments(); 
-
-
 
     return load_successful;
 }
@@ -233,6 +231,7 @@ double findStreetSegmentTurnAngle(StreetSegmentIdx src_street_segment_id, Street
     double b = findDistanceBetweenTwoPoints(intersectionPos, dstPT);
     double c = findDistanceBetweenTwoPoints(srcPT, dstPT);
     double cos_theta = (a*a + b*b - c*c) / (2*a*b);
+    // constrain the  range of cosine into [-1, 1] with correcting tiny out of range
     if(cos_theta > 1){
         cos_theta = 1;
     }
@@ -272,7 +271,19 @@ LatLonBounds findStreetBoundingBox(StreetIdx street_id){
 }
 
 POIIdx findClosestPOI(LatLon my_position, std::string poi_type){
-    return POIIdx();
+    double minimum = 100000;
+    POIIdx POI_idx = -1;
+    for(POIIdx count = 0; count < getNumPointsOfInterest(); count++){
+        if(getPOIType(count) == poi_type){
+            LatLon POI_pos = getPOIPosition(count);
+            double curr_distance = findDistanceBetweenTwoPoints(POI_pos, my_position);
+            if(curr_distance < minimum){
+                minimum = curr_distance;
+                POI_idx = count;
+            }
+        }
+    }
+    return POI_idx;
 }
 
 std::vector<IntersectionIdx> findAdjacentIntersections(IntersectionIdx intersection_id){
@@ -280,7 +291,17 @@ std::vector<IntersectionIdx> findAdjacentIntersections(IntersectionIdx intersect
 }
 
 IntersectionIdx findClosestIntersection(LatLon my_position){
-    return IntersectionIdx(-1);
+    double minimum = findDistanceBetweenTwoPoints(getIntersectionPosition(0), my_position);
+    IntersectionIdx intersectID = -1;
+    for(IntersectionIdx i = 1; i < getNumIntersections(); i++){
+        LatLon intersectPos = getIntersectionPosition(i);
+        double distance = findDistanceBetweenTwoPoints(intersectPos, my_position);
+        if(distance < minimum){
+            minimum = distance;
+            intersectID = i;
+        }
+    }
+    return intersectID;
 }
 
 std::vector<StreetSegmentIdx> findStreetSegmentsOfIntersection (IntersectionIdx intersection_id) {
