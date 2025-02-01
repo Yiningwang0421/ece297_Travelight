@@ -43,6 +43,7 @@
 
 // Global nested vector: Index is streetId, value is a vector of segment IDs
 std::vector<std::vector<StreetSegmentIdx>> streetSegmentVector;
+std::vector<std::pair<double, double>> segmentData;  //  First = length, Second = speed limit
 void preprocessStreetSegments(); 
 
 
@@ -169,6 +170,7 @@ double findStreetSegmentLength(StreetSegmentIdx street_segment_id){
 //Speed Requirement --> High
 // double findStreetSegmentTravelTime(StreetSegmentIdx street_segment_id){
     
+<<<<<<< HEAD
 //     StreetSegmentInfo streetSegment = getStreetSegmentInfo(street_segment_id);
 //     double segmentLength = findStreetSegmentLength(street_segment_id);
 
@@ -205,6 +207,12 @@ LatLon getClosestSegment(StreetSegmentIdx segmentID, IntersectionIdx intersectio
     else{
         return getIntersectionPosition(segmentInfo.to); 
     }
+=======
+   double segmentLength = segmentData[street_segment_id].first;  
+    double speedLimit = segmentData[street_segment_id].second;  
+
+    return (speedLimit > 0) ? (segmentLength / speedLimit) : 0.0;  // ✅ Quick Check
+>>>>>>> 40822fae81617b5179b22b1ffe8ba893b0cb51bd
 }
 
 double findStreetSegmentTurnAngle(StreetSegmentIdx src_street_segment_id, StreetSegmentIdx dst_street_id){
@@ -250,7 +258,8 @@ double findStreetLength(StreetIdx street_id){
         
         const std::vector<StreetSegmentIdx>& segmentsOfStreetId = streetSegmentVector[street_id];
         for (StreetSegmentIdx i = 0; i < segmentsOfStreetId.size(); i++) {
-        totalLength += findStreetSegmentLength(segmentsOfStreetId[i]);
+            
+        totalLength += segmentData[segmentsOfStreetId[i]].first;
         
     }
 }
@@ -349,11 +358,16 @@ std::string getOSMNodeTagValue(OSMID osm_id, std::string key){
 
 void preprocessStreetSegments() {
     int numStreets = getNumStreets();
-    streetSegmentVector.resize(numStreets);  
+    streetSegmentVector.resize(numStreets);
+    int numSegments = getNumStreetSegments();
+    segmentData.resize(numSegments);
+
 
     // Loop through all street segments and store them in the corresponding street
     for (int segmentId = 0; segmentId < getNumStreetSegments(); segmentId++) {
         StreetSegmentInfo segmentInfo = getStreetSegmentInfo(segmentId);
         streetSegmentVector[segmentInfo.streetID].push_back(segmentId);
+        double segmentLength = findStreetSegmentLength(segmentId);
+        segmentData[segmentId] = {segmentLength, segmentInfo.speedLimit}; 
     }
 }
