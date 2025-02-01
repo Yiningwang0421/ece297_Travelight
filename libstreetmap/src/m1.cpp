@@ -51,6 +51,8 @@ void preprocessStreetSegments();
 //global variables for function usage
 std::vector<std::vector<StreetSegmentIdx>> intersection_street_segments; 
 std::vector<std::vector<IntersectionIdx>> adjacent_street_segments;
+//OSMNode
+std::unordered_map<OSMID, std::unordered_map<std::string, std::string>> OSMvec;
 bool loadMap(std::string map_streets_database_filename) {
 
 
@@ -63,13 +65,18 @@ bool loadMap(std::string map_streets_database_filename) {
     //
     // Load your map related data structures here.
     //
-    // findStreetSegmentsOfIntersection()
+    std::string osm_mapfilename = map_streets_database_filename;
+    osm_mapfilename.replace(osm_mapfilename.find(".street"), 8, ".osm");
+    bool osmload_successful = loadOSMDatabaseBIN(osm_mapfilename);
+    if(osmload_successful == false){
+        return false;
+    }
+
     intersection_street_segments.resize(getNumIntersections());
     adjacent_street_segments.resize(getNumIntersections());
 
     for(IntersectionIdx intersection_id = 0; intersection_id < getNumIntersections(); intersection_id++){
         int segments = getNumIntersectionStreetSegment(intersection_id);
-
         for(int i = 0; i < segments; i++){
             StreetSegmentIdx ss_id = getIntersectionStreetSegment(intersection_id, i); //finding  the streetsegment intersection
             intersection_street_segments[intersection_id].push_back(ss_id);
@@ -86,7 +93,7 @@ bool loadMap(std::string map_streets_database_filename) {
             else if(ss_info.to == intersection_id && ss_info.from == intersection_id){ //corner case for cul-de-sacs
                 adjacent = ss_info.to;
             }
-            //no  duplicate intersection
+            //no duplicate happens
             if(std::find(adjacent_street_segments[intersection_id].begin(), adjacent_street_segments[intersection_id].end(), adjacent) == adjacent_street_segments[intersection_id].end()){
                 uniqueAdjSegment = true;
             }
@@ -96,6 +103,18 @@ bool loadMap(std::string map_streets_database_filename) {
         }
     }
 
+    for(int i = 0; i < getNumberOfNodes(); i++){
+        const OSMNode* node = getNodeByIndex(i);
+        OSMID nodeId = node ->  id();
+        std::unordered_map<std::string, std::string> storeTag;
+        int nodeTag= getTagCount(node);
+
+        for(int j = 0; j < nodeTag; j++){
+            std::pair<std::string, std::string> tagPair =  getTagPair(node, j);
+            storeTag[tagPair.first] = tagPair.second; //letting the index spot at map gets the value
+        }
+        OSMvec[nodeId] = storeTag;
+    }
 
 
     load_successful = true; //Make sure this is updated to reflect whether
@@ -357,7 +376,17 @@ std::vector<StreetIdx> findStreetIdsFromPartialStreetName(std::string street_pre
 }
 
 std::string getOSMNodeTagValue(OSMID osm_id, std::string key){
-    return std::string();
+    std::unordered_map<OSMID, std::unordered_map<std::string, std::string>>::iterator currNode = OSMvec.find(osm_id);
+    if(currNode != OSMvec.end()){ //unique
+        std::unordered_map<std::string, std::string>::iterator currTag = currNode -> second.find(key);
+        if(currTag != currNode -> second.end()){
+            return  currTag -> second;
+        }
+    }
+    else{
+        return "";
+    }
+
 }
 
 
