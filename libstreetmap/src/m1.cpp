@@ -24,8 +24,6 @@
 
 #include "OSMDatabaseAPI.h"
 #include "math.h"
-
-
 #include <vector>
 
 // loadMap will be called with the name of the file that stores the "layer-2"
@@ -40,6 +38,13 @@
 // name of the ".osm.bin" file that matches your map -- just change 
 // ".streets" to ".osm" in the map_streets_database_filename to get the proper
 // name.
+
+
+// Global nested vector: Index is streetId, value is a vector of segment IDs
+std::vector<std::vector<StreetSegmentIdx>> streetSegmentVector;
+void preprocessStreetSegments(); 
+
+
 
 //global variables for function usage
 std::vector<std::vector<StreetSegmentIdx>> intersection_street_segments; 
@@ -164,20 +169,27 @@ double findStreetSegmentLength(StreetSegmentIdx street_segment_id){
 
 //helper function for finding non straight street
 LatLon getClosestSegment(StreetSegmentIdx segmentID, IntersectionIdx intersection){
-    StreetSegmentInfo segmentInfo = getStreetSegmentInfo(segmentID);
-    if(segmentInfo.numCurvePoints > 0){ // curved street
-        for(int pt = 0; pt < segmentInfo.numCurvePoints - 1; pt++){
-            LatLon curvePtPos = getStreetSegmentCurvePoint(segmentID, pt);
-            if(segmentInfo.to() == curvePtPos.latitude()){
-                return segmentID 
+    StreetSegmentInfo segmentInfo = getStreetSegmentInfo(segmentID); //getting the first street segment information
+    LatLon IntersectionPos = getIntersectionPosition(intersection);
+    if(segmentInfo.numCurvePoints > 0){ 
+        LatLon closestPT = getStreetSegmentCurvePoint(segmentID, 0); // setting a first segment to compare with
+        double minimum = findDistanceBetweenTwoPoints(IntersectionPos, closestPT);
+        for (int currID = 1; currID < segmentInfo.numCurvePoints; currID++){   // for the later curve point on segment
+            LatLon curvePT = getStreetSegmentCurvePoint(segmentID, currID);
+            double curveDis = findDistanceBetweenTwoPoints(IntersectionPos, curvePT);
+            if(curveDis < minimum){
+                minimum = curveDis;
+                closestPT = curvePT;
             }
+        }
+        return closestPT; //the latest curvepoint returned
     }
     //straight street
     if(segmentInfo.to == intersection){
-        return getIntersectionPosition(segmentInfo.from);
+        return getIntersectionPosition(segmentInfo.from); 
     }
     else{
-        return getIntersectionPosition(segmentInfo.to);
+        return getIntersectionPosition(segmentInfo.to); 
     }
 }
 
@@ -186,16 +198,10 @@ double findStreetSegmentTurnAngle(StreetSegmentIdx src_street_segment_id, Street
     StreetSegmentInfo dst_info = getStreetSegmentInfo(dst_street_id);
     IntersectionIdx intersection = -1;
     // checking intersection category
-    if(src_info.to == dst_info.from){
-        intersection = src_info.to;
+    if(src_info.to == dst_info.from || src_info.to == dst_info.to){
+        intersection = src_info.to; //any one as long as to and from has a POI
     }
-    else if(src_info.from == dst_info.to){
-        intersection = src_info.from;
-    }
-    else if(src_info.to == dst_info.to){
-        intersection = src_info.to;
-    }
-    else if(src_info.from == dst_info.from){
+    else if(src_info.from == dst_info.to || src_info.from == dst_info.from){
         intersection = src_info.from;
     }
     else{
@@ -210,9 +216,15 @@ double findStreetSegmentTurnAngle(StreetSegmentIdx src_street_segment_id, Street
     double a = findDistanceBetweenTwoPoints(intersectionPos, srcPT);
     double b = findDistanceBetweenTwoPoints(intersectionPos, dstPT);
     double c = findDistanceBetweenTwoPoints(srcPT, dstPT);
-    double turnAngle = acos((a*a + b*b - c*c) / (2*a*b));
-    return turnAngle;
-
+    double cos_theta = (a*a + b*b - c*c) / (2*a*b);
+    if(cos_theta > 1){
+        cos_theta = 1;
+    }
+    else if(cos_theta < -1){
+        cos_theta = -1;
+    }
+    double turnAngle = acos(cos_theta);
+    return M_PI - turnAngle;
 }
 
 // double findStreetLength(StreetIdx street_id){
@@ -292,4 +304,17 @@ std::vector<StreetIdx> findStreetIdsFromPartialStreetName(std::string street_pre
 
 std::string getOSMNodeTagValue(OSMID osm_id, std::string key){
     return std::string();
+}
+
+
+void preprocessStreetSegments() {
+    StreetSegmentIdx numOfStreets = getNumStreets();
+    
+    streetSegmentVector.resize(numOfStreets);  
+
+    // Loop through all street segments and store them in the corresponding street
+    for (StreetSegmentIdx segmentId = 0; segmentId < getNumStreetSegments(); segmentId++) {
+        StreetSegmentInfo segmentInfo = getStreetSegmentInfo(segmentId);
+        streetSegmentVector[segmentInfo.streetID].push_back(segmentId);
+    }
 }
