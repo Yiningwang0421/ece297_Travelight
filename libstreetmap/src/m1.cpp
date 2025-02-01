@@ -260,7 +260,24 @@ double findFeatureArea(FeatureIdx feature_id){
 }
 
 double findWayLength(OSMID way_id){
-    return 0.0;
+    double totalLength = 0.0;
+
+    const OSMWay* way = getWayByIndex(static_cast<int>(uint64_t(way_id)));  
+    if (!way) return 0.0;
+
+    const std::vector<OSMID>& wayNodes = getWayMembers(way);
+    if (wayNodes.size() < 2) return 0.0;
+
+    
+    for (int i = 0; i < (wayNodes.size() - 1); i++) {
+        LatLon point1 = getNodeCoords(getNodeByIndex(static_cast<int>(uint64_t(wayNodes[i]))));  
+        LatLon point2 = getNodeCoords(getNodeByIndex(static_cast<int>(uint64_t(wayNodes[i+1]))));
+
+        totalLength += findDistanceBetweenTwoPoints(point1, point2);
+    }
+
+    return totalLength;
+
 }
 
 LatLonBounds findStreetBoundingBox(StreetIdx street_id){
