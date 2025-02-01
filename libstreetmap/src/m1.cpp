@@ -21,6 +21,7 @@
 #include <iostream>
 #include "m1.h"
 #include "StreetsDatabaseAPI.h"
+#include <cmath>
 
 #include "OSMDatabaseAPI.h"
 #include "math.h"
@@ -56,6 +57,7 @@ bool loadMap(std::string map_streets_database_filename) {
 
     bool load_successful = loadStreetsDatabaseBIN(map_streets_database_filename); //Indicates whether the map has loaded 
                                   //successfully
+
     std::cout << "loadMap: " << map_streets_database_filename << std::endl;
     if(load_successful == false){
         return false;
@@ -98,8 +100,9 @@ bool loadMap(std::string map_streets_database_filename) {
 
 
 
+
     load_successful = true; //Make sure this is updated to reflect whether
-                            //loading the map succeeded or failed
+    //loading the map succeeded or failed
 
     preprocessStreetSegments(); 
 
@@ -255,8 +258,35 @@ double findStreetLength(StreetIdx street_id){
     return totalLength;
 }
 
-double findFeatureArea(FeatureIdx feature_id){
-    return 0.0;
+double findFeatureArea(FeatureIdx feature_id) {
+    int numOfPoints = getNumFeaturePoints(feature_id);
+    double area = 0.0;
+    
+    //Check if the feature is closed
+    if (numOfPoints >= 3 && (getFeaturePoint(feature_id,0).latitude() == getFeaturePoint(feature_id, numOfPoints-1).latitude())
+            && (getFeaturePoint(feature_id,0).longitude() == getFeaturePoint(feature_id, numOfPoints-1).longitude())) {
+        
+        //Calculate the average latitude of the feature
+        double avgLat = 0;
+        for (int i=0; i<numOfPoints-1; i++){
+            avgLat = avgLat + getFeaturePoint(feature_id, i).latitude();
+        }
+        avgLat = avgLat/(numOfPoints - 1);
+        
+        //Calculate the area of the feature using trapezoid formula
+        double xi = 0.0;
+        double x2 = 0.0;
+        double yi = 0.0;
+        double y2 = 0.0;
+        for (int i = 0; i < numOfPoints - 1; i++) {
+            xi = kEarthRadiusInMeters * getFeaturePoint(feature_id, i).longitude() * cos(kDegreeToRadian * avgLat);
+            yi = kEarthRadiusInMeters * getFeaturePoint(feature_id, i).latitude();
+            x2 = kEarthRadiusInMeters * getFeaturePoint(feature_id, i + 1).longitude() * cos(kDegreeToRadian * avgLat);
+            y2 = kEarthRadiusInMeters * getFeaturePoint(feature_id, i + 1).latitude();
+            area = area + 0.5 * (yi + y2)*(xi - x2)/3282.81;
+        }
+    }
+    return abs(area);
 }
 
 double findWayLength(OSMID way_id){
@@ -325,7 +355,8 @@ std::vector<StreetSegmentIdx> findStreetSegmentsOfIntersection (IntersectionIdx 
 // Returns all intersections along the given street.
 // There should be no duplicate intersections in the returned vector.
 // Speed Requirement --> high
-std::vector<IntersectionIdx> findIntersectionsOfStreet(StreetIdx street_id){
+
+std::vector<IntersectionIdx> findIntersectionsOfStreet(StreetIdx street_id) {
     return std::vector<IntersectionIdx>();
 }
 
@@ -336,7 +367,8 @@ std::vector<IntersectionIdx> findIntersectionsOfStreet(StreetIdx street_id){
 // streets cross.
 // There should be no duplicate intersections in the returned vector.
 // Speed Requirement --> high
-std::vector<IntersectionIdx> findIntersectionsOfTwoStreets(std::pair<StreetIdx, StreetIdx> street_ids){
+
+std::vector<IntersectionIdx> findIntersectionsOfTwoStreets(std::pair<StreetIdx, StreetIdx> street_ids) {
     return std::vector<IntersectionIdx>();
 }
 
@@ -352,11 +384,12 @@ std::vector<IntersectionIdx> findIntersectionsOfTwoStreets(std::pair<StreetIdx, 
 // (length 0) string, but your program must not crash if street_prefix is a
 // length 0 string.
 // Speed Requirement --> high
-std::vector<StreetIdx> findStreetIdsFromPartialStreetName(std::string street_prefix){
+
+std::vector<StreetIdx> findStreetIdsFromPartialStreetName(std::string street_prefix) {
     return std::vector<StreetIdx>();
 }
 
-std::string getOSMNodeTagValue(OSMID osm_id, std::string key){
+std::string getOSMNodeTagValue(OSMID osm_id, std::string key) {
     return std::string();
 }
 
