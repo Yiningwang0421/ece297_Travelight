@@ -168,20 +168,13 @@ double findStreetSegmentLength(StreetSegmentIdx street_segment_id){
 //Returns the travel time to drive a street segment in seconds
 //(time = distance / speed_limit)
 //Speed Requirement --> High
-// double findStreetSegmentTravelTime(StreetSegmentIdx street_segment_id){
-    
-<<<<<<< HEAD
-//     StreetSegmentInfo streetSegment = getStreetSegmentInfo(street_segment_id);
-//     double segmentLength = findStreetSegmentLength(street_segment_id);
+double findStreetSegmentTravelTime(StreetSegmentIdx street_segment_id){
+    double segmentLength = segmentData[street_segment_id].first;  
+    double speedLimit = segmentData[street_segment_id].second;  
 
-//     double speedLimit = segmentLength.speedLimit;
+    return (speedLimit > 0) ? (segmentLength / speedLimit) : 0.0;  // ✅ Quick Check
 
-//     if (speedLimit <= 0) {
-//         return 0.0;
-//     }
-
-//     return segmentLength / speedLimit;  
-// }
+}
 
 //helper function for finding non straight street
 LatLon getClosestSegment(StreetSegmentIdx segmentID, IntersectionIdx intersection){
@@ -207,12 +200,7 @@ LatLon getClosestSegment(StreetSegmentIdx segmentID, IntersectionIdx intersectio
     else{
         return getIntersectionPosition(segmentInfo.to); 
     }
-=======
-   double segmentLength = segmentData[street_segment_id].first;  
-    double speedLimit = segmentData[street_segment_id].second;  
 
-    return (speedLimit > 0) ? (segmentLength / speedLimit) : 0.0;  // ✅ Quick Check
->>>>>>> 40822fae81617b5179b22b1ffe8ba893b0cb51bd
 }
 
 double findStreetSegmentTurnAngle(StreetSegmentIdx src_street_segment_id, StreetSegmentIdx dst_street_id){
