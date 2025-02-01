@@ -25,6 +25,7 @@
 #include "OSMDatabaseAPI.h"
 #include "math.h"
 #include <vector>
+#include <unordered_set>
 
 // loadMap will be called with the name of the file that stores the "layer-2"
 // map data accessed through StreetsDatabaseAPI: the street and intersection 
@@ -50,6 +51,8 @@ void preprocessStreetSegments();
 std::vector<std::vector<StreetSegmentIdx>> intersection_street_segments; 
 std::vector<std::vector<IntersectionIdx>> adjacent_street_segments;
 bool loadMap(std::string map_streets_database_filename) {
+
+
     bool load_successful = loadStreetsDatabaseBIN(map_streets_database_filename); //Indicates whether the map has loaded 
                                   //successfully
     std::cout << "loadMap: " << map_streets_database_filename << std::endl;
@@ -64,21 +67,27 @@ bool loadMap(std::string map_streets_database_filename) {
     for(IntersectionIdx intersection_id = 0; intersection_id < getNumIntersections(); intersection_id++){
         int segments = getNumIntersectionStreetSegment(intersection_id);
 
-        intersection_street_segments[intersection_id].reserve(segments);
         for(int i = 0; i < segments; i++){
-            StreetSegmentIdx ss_id = getIntersectionStreetSegment(intersection_id, i);
+            StreetSegmentIdx ss_id = getIntersectionStreetSegment(intersection_id, i); //finding  the streetsegment intersection
             intersection_street_segments[intersection_id].push_back(ss_id);
             StreetSegmentInfo ss_info = getStreetSegmentInfo(ss_id); // get each street's info
             IntersectionIdx adjacent = 0;
+            bool uniqueAdjSegment = false;
+            //finding the adjacent point for forming a vector
             if(ss_info.from == intersection_id){
                 adjacent = ss_info.to;
             }
             else if(ss_info.to == intersection_id && !(ss_info.oneWay)){
                 adjacent = ss_info.from;
             }
-            if(adjacent != 0 && std::find(adjacent_street_segments[intersection_id].begin(), 
-                                            adjacent_street_segments[intersection_id].end(),
-                                            adjacent) ==  adjacent_street_segments[intersection_id].end()){
+            else if(ss_info.to == intersection_id && ss_info.from == intersection_id){ //corner case for cul-de-sacs
+                adjacent = ss_info.to;
+            }
+            //no  duplicate intersection
+            if(std::find(adjacent_street_segments[intersection_id].begin(), adjacent_street_segments[intersection_id].end(), adjacent) == adjacent_street_segments[intersection_id].end()){
+                uniqueAdjSegment = true;
+            }
+            if(adjacent != 0 && uniqueAdjSegment == true){
                 adjacent_street_segments[intersection_id].push_back(adjacent);
             }
         }
@@ -91,6 +100,10 @@ bool loadMap(std::string map_streets_database_filename) {
     load_successful = true; //Make sure this is updated to reflect whether
                             //loading the map succeeded or failed
 
+    preprocessStreetSegments(); 
+
+
+
     return load_successful;
 }
 
@@ -98,6 +111,7 @@ void closeMap() {
     //Clean-up your map related data structures here
     intersection_street_segments.clear();
     closeStreetDatabase();
+    streetSegmentVector.clear();
 }
 
 // Returns the distance between two (latitude, longitude) coordinates in meters.
@@ -130,10 +144,12 @@ double findStreetSegmentLength(StreetSegmentIdx street_segment_id){
     
     StreetSegmentInfo streetSegment = getStreetSegmentInfo(street_segment_id);
 
+
     // Get the Start Point
     LatLon startPoint = getIntersectionPosition(streetSegment.from);
 
     double totalLength = 0.0;
+    
 
     // Iterate through curve points
     for (int i = 0; i < streetSegment.numCurvePoints; i++) {
@@ -227,18 +243,21 @@ double findStreetSegmentTurnAngle(StreetSegmentIdx src_street_segment_id, Street
     return M_PI - turnAngle;
 }
 
-// double findStreetLength(StreetIdx street_id){
-//     if (streetSegmentMap.count(streetId)) {
-//         std::vector<int> segments = streetSegmentMap[streetId];  
+double findStreetLength(StreetIdx street_id){
 
-//         // Loop through segments and sum their lengths
-//         for (int i = 0; i < (int)segments.size(); i++) {
-//             totalLength += findStreetSegmentLength(segments[i]);
-//         }
-//     }
-
-//     return totalLength; 
-// }
+    double totalLength = 0.0;
+    if (street_id >= 0 && street_id < streetSegmentVector.size())
+    {
+        
+        const std::vector<StreetSegmentIdx>& segmentsOfStreetId = streetSegmentVector[street_id];
+        for (StreetSegmentIdx i = 0; i < segmentsOfStreetId.size(); i++) {
+        totalLength += findStreetSegmentLength(segmentsOfStreetId[i]);
+        
+    }
+}
+    
+    return totalLength;
+}
 
 double findFeatureArea(FeatureIdx feature_id){
     return 0.0;
@@ -308,12 +327,11 @@ std::string getOSMNodeTagValue(OSMID osm_id, std::string key){
 
 
 void preprocessStreetSegments() {
-    StreetSegmentIdx numOfStreets = getNumStreets();
-    
-    streetSegmentVector.resize(numOfStreets);  
+    int numStreets = getNumStreets();
+    streetSegmentVector.resize(numStreets);  
 
     // Loop through all street segments and store them in the corresponding street
-    for (StreetSegmentIdx segmentId = 0; segmentId < getNumStreetSegments(); segmentId++) {
+    for (int segmentId = 0; segmentId < getNumStreetSegments(); segmentId++) {
         StreetSegmentInfo segmentInfo = getStreetSegmentInfo(segmentId);
         streetSegmentVector[segmentInfo.streetID].push_back(segmentId);
     }
