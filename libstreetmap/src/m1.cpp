@@ -44,6 +44,11 @@
 // Global nested vector: Index is streetId, value is a vector of segment IDs
 std::vector<std::vector<StreetSegmentIdx>> streetSegmentVector;
 std::vector<std::pair<double, double>> segmentData;  //  First = length, Second = speed limit
+std::vector<std::pair<LatLon, LatLon>> segmentLatLon;  // Stores (from, to) LatLon for each segment
+std::vector<std::pair<double, double>> streetLat;  // Stores (min_lat, max_lat) for each street
+std::vector<std::pair<double, double>> streetLon;  // Stores (min_lon, max_lon) for each street
+
+
 void preprocessStreetSegments(); 
 
 
@@ -281,7 +286,10 @@ double findWayLength(OSMID way_id){
 }
 
 LatLonBounds findStreetBoundingBox(StreetIdx street_id){
-    return LatLonBounds();
+    LatLon minLatLon(streetLat[street_id].first, streetLon[street_id].first);
+    LatLon maxLatLon(streetLat[street_id].second, streetLon[street_id].second);
+
+    return {minLatLon, maxLatLon};
 }
 
 POIIdx findClosestPOI(LatLon my_position, std::string poi_type){
@@ -367,12 +375,43 @@ void preprocessStreetSegments() {
     int numSegments = getNumStreetSegments();
     segmentData.resize(numSegments);
 
+    segmentLatLon.resize(numSegments);
+    
+    streetLat.resize(numStreets, {10000000, -10000000});
+    streetLon.resize(numStreets, {10000000, -10000000});
 
-    // Loop through all street segments and store them in the corresponding street
+    // Loop through all street segments and store coresponding info in the corresponding vectors
     for (int segmentId = 0; segmentId < getNumStreetSegments(); segmentId++) {
         StreetSegmentInfo segmentInfo = getStreetSegmentInfo(segmentId);
         streetSegmentVector[segmentInfo.streetID].push_back(segmentId);
+////////////////////        
         double segmentLength = findStreetSegmentLength(segmentId);
-        segmentData[segmentId] = {segmentLength, segmentInfo.speedLimit}; 
+        segmentData[segmentId] = {segmentLength, segmentInfo.speedLimit};
+///////////////////
+        LatLon fromPos = getIntersectionPosition(segmentInfo.from);
+        LatLon toPos = getIntersectionPosition(segmentInfo.to);
+        segmentLatLon[segmentId] = {fromPos, toPos};
+////////////////////
+        int streetId = segmentInfo.streetID;
+        
+        streetLat[streetId].first = std::min({streetLat[streetId].first, fromPos.latitude(), toPos.latitude()});
+        streetLat[streetId].second = std::max({streetLat[streetId].second, fromPos.latitude(), toPos.latitude()});
+
+        
+        streetLon[streetId].first = std::min({streetLon[streetId].first, fromPos.longitude(), toPos.longitude()});
+        streetLon[streetId].second = std::max({streetLon[streetId].second, fromPos.longitude(), toPos.longitude()});
+
+        // Include curve points in min/max lat/lon calculations
+        for (int i = 0; i < segmentInfo.numCurvePoints; i++) {
+            LatLon curvePoint = getStreetSegmentCurvePoint(segmentId, i);
+
+            // Update 
+            streetLat[streetId].first = std::min(streetLat[streetId].first, curvePoint.latitude());
+            streetLat[streetId].second = std::max(streetLat[streetId].second, curvePoint.latitude());
+
+            streetLon[streetId].first = std::min(streetLon[streetId].first, curvePoint.longitude());
+            streetLon[streetId].second = std::max(streetLon[streetId].second, curvePoint.longitude());
+        }
+
     }
 }
