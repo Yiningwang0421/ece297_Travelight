@@ -108,6 +108,7 @@ void closeMap() {
     intersection_street_segments.clear();
     closeStreetDatabase();
     streetSegmentVector.clear();
+    segmentData.clear();
 }
 
 // Returns the distance between two (latitude, longitude) coordinates in meters.
@@ -170,7 +171,7 @@ double findStreetSegmentTravelTime(StreetSegmentIdx street_segment_id){
    double segmentLength = segmentData[street_segment_id].first;  
     double speedLimit = segmentData[street_segment_id].second;  
 
-    return (speedLimit > 0) ? (segmentLength / speedLimit) : 0.0;  // ✅ Quick Check
+    return (speedLimit > 0) ? (segmentLength / speedLimit) : 0.0;  
 }
 
 double findStreetSegmentTurnAngle(StreetSegmentIdx src_street_segment_id, StreetSegmentIdx dst_street_id){
