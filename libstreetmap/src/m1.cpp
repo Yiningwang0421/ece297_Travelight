@@ -21,6 +21,7 @@
 #include <iostream>
 #include "m1.h"
 #include "StreetsDatabaseAPI.h"
+#include <cmath>
 
 #include "OSMDatabaseAPI.h"
 #include "math.h"
@@ -44,6 +45,11 @@
 // Global nested vector: Index is streetId, value is a vector of segment IDs
 std::vector<std::vector<StreetSegmentIdx>> streetSegmentVector;
 std::vector<std::pair<double, double>> segmentData;  //  First = length, Second = speed limit
+std::vector<std::pair<LatLon, LatLon>> segmentLatLon;  // Stores (from, to) LatLon for each segment
+std::vector<std::pair<double, double>> streetLat;  // Stores (min_lat, max_lat) for each street
+std::vector<std::pair<double, double>> streetLon;  // Stores (min_lon, max_lon) for each street
+
+
 void preprocessStreetSegments(); 
 
 
@@ -58,6 +64,7 @@ bool loadMap(std::string map_streets_database_filename) {
 
     bool load_successful = loadStreetsDatabaseBIN(map_streets_database_filename); //Indicates whether the map has loaded 
                                   //successfully
+
     std::cout << "loadMap: " << map_streets_database_filename << std::endl;
     if(load_successful == false){
         return false;
@@ -117,8 +124,9 @@ bool loadMap(std::string map_streets_database_filename) {
     }
 
 
+
     load_successful = true; //Make sure this is updated to reflect whether
-                            //loading the map succeeded or failed
+    //loading the map succeeded or failed
 
     preprocessStreetSegments(); 
 
@@ -128,7 +136,10 @@ bool loadMap(std::string map_streets_database_filename) {
 void closeMap() {
     //Clean-up your map related data structures here
     intersection_street_segments.clear();
+    adjacent_street_segments.clear();
+    OSMvec.clear();
     closeStreetDatabase();
+    closeOSMDatabase();
     streetSegmentVector.clear();
     segmentData.clear();
 }
@@ -274,8 +285,35 @@ double findStreetLength(StreetIdx street_id){
     return totalLength;
 }
 
-double findFeatureArea(FeatureIdx feature_id){
-    return 0.0;
+double findFeatureArea(FeatureIdx feature_id) {
+    int numOfPoints = getNumFeaturePoints(feature_id);
+    double area = 0.0;
+    
+    //Check if the feature is closed
+    if (numOfPoints >= 3 && (getFeaturePoint(feature_id,0).latitude() == getFeaturePoint(feature_id, numOfPoints-1).latitude())
+            && (getFeaturePoint(feature_id,0).longitude() == getFeaturePoint(feature_id, numOfPoints-1).longitude())) {
+        
+        //Calculate the average latitude of the feature
+        double avgLat = 0;
+        for (int i=0; i<numOfPoints-1; i++){
+            avgLat = avgLat + getFeaturePoint(feature_id, i).latitude();
+        }
+        avgLat = avgLat/(numOfPoints - 1);
+        
+        //Calculate the area of the feature using trapezoid formula
+        double xi = 0.0;
+        double x2 = 0.0;
+        double yi = 0.0;
+        double y2 = 0.0;
+        for (int i = 0; i < numOfPoints - 1; i++) {
+            xi = kEarthRadiusInMeters * getFeaturePoint(feature_id, i).longitude() * cos(kDegreeToRadian * avgLat);
+            yi = kEarthRadiusInMeters * getFeaturePoint(feature_id, i).latitude();
+            x2 = kEarthRadiusInMeters * getFeaturePoint(feature_id, i + 1).longitude() * cos(kDegreeToRadian * avgLat);
+            y2 = kEarthRadiusInMeters * getFeaturePoint(feature_id, i + 1).latitude();
+            area = area + 0.5 * (yi + y2)*(xi - x2)/3282.81;
+        }
+    }
+    return abs(area);
 }
 
 double findWayLength(OSMID way_id){
@@ -300,7 +338,10 @@ double findWayLength(OSMID way_id){
 }
 
 LatLonBounds findStreetBoundingBox(StreetIdx street_id){
-    return LatLonBounds();
+    LatLon minLatLon(streetLat[street_id].first, streetLon[street_id].first);
+    LatLon maxLatLon(streetLat[street_id].second, streetLon[street_id].second);
+
+    return {minLatLon, maxLatLon};
 }
 
 POIIdx findClosestPOI(LatLon my_position, std::string poi_type){
@@ -344,7 +385,8 @@ std::vector<StreetSegmentIdx> findStreetSegmentsOfIntersection (IntersectionIdx 
 // Returns all intersections along the given street.
 // There should be no duplicate intersections in the returned vector.
 // Speed Requirement --> high
-std::vector<IntersectionIdx> findIntersectionsOfStreet(StreetIdx street_id){
+
+std::vector<IntersectionIdx> findIntersectionsOfStreet(StreetIdx street_id) {
     return std::vector<IntersectionIdx>();
 }
 
@@ -355,7 +397,8 @@ std::vector<IntersectionIdx> findIntersectionsOfStreet(StreetIdx street_id){
 // streets cross.
 // There should be no duplicate intersections in the returned vector.
 // Speed Requirement --> high
-std::vector<IntersectionIdx> findIntersectionsOfTwoStreets(std::pair<StreetIdx, StreetIdx> street_ids){
+
+std::vector<IntersectionIdx> findIntersectionsOfTwoStreets(std::pair<StreetIdx, StreetIdx> street_ids) {
     return std::vector<IntersectionIdx>();
 }
 
@@ -371,14 +414,15 @@ std::vector<IntersectionIdx> findIntersectionsOfTwoStreets(std::pair<StreetIdx, 
 // (length 0) string, but your program must not crash if street_prefix is a
 // length 0 string.
 // Speed Requirement --> high
-std::vector<StreetIdx> findStreetIdsFromPartialStreetName(std::string street_prefix){
+
+std::vector<StreetIdx> findStreetIdsFromPartialStreetName(std::string street_prefix) {
     return std::vector<StreetIdx>();
 }
 
 std::string getOSMNodeTagValue(OSMID osm_id, std::string key){
     std::unordered_map<OSMID, std::unordered_map<std::string, std::string>>::iterator currNode = OSMvec.find(osm_id);
-    if(currNode != OSMvec.end()){ //unique
-        std::unordered_map<std::string, std::string>::iterator currTag = currNode -> second.find(key);
+    if(currNode != OSMvec.end()){ //starting to find the  key value inside the OSMNode
+        std::unordered_map<std::string, std::string>::iterator currTag = currNode -> second.find(key);  // the curret one tag  has the node tag information
         if(currTag != currNode -> second.end()){
             return  currTag -> second;
         }
@@ -396,12 +440,43 @@ void preprocessStreetSegments() {
     int numSegments = getNumStreetSegments();
     segmentData.resize(numSegments);
 
+    segmentLatLon.resize(numSegments);
+    
+    streetLat.resize(numStreets, {10000000, -10000000});
+    streetLon.resize(numStreets, {10000000, -10000000});
 
-    // Loop through all street segments and store them in the corresponding street
+    // Loop through all street segments and store coresponding info in the corresponding vectors
     for (int segmentId = 0; segmentId < getNumStreetSegments(); segmentId++) {
         StreetSegmentInfo segmentInfo = getStreetSegmentInfo(segmentId);
         streetSegmentVector[segmentInfo.streetID].push_back(segmentId);
+////////////////////        
         double segmentLength = findStreetSegmentLength(segmentId);
-        segmentData[segmentId] = {segmentLength, segmentInfo.speedLimit}; 
+        segmentData[segmentId] = {segmentLength, segmentInfo.speedLimit};
+///////////////////
+        LatLon fromPos = getIntersectionPosition(segmentInfo.from);
+        LatLon toPos = getIntersectionPosition(segmentInfo.to);
+        segmentLatLon[segmentId] = {fromPos, toPos};
+////////////////////
+        int streetId = segmentInfo.streetID;
+        
+        streetLat[streetId].first = std::min({streetLat[streetId].first, fromPos.latitude(), toPos.latitude()});
+        streetLat[streetId].second = std::max({streetLat[streetId].second, fromPos.latitude(), toPos.latitude()});
+
+        
+        streetLon[streetId].first = std::min({streetLon[streetId].first, fromPos.longitude(), toPos.longitude()});
+        streetLon[streetId].second = std::max({streetLon[streetId].second, fromPos.longitude(), toPos.longitude()});
+
+        // Include curve points in min/max lat/lon calculations
+        for (int i = 0; i < segmentInfo.numCurvePoints; i++) {
+            LatLon curvePoint = getStreetSegmentCurvePoint(segmentId, i);
+
+            // Update 
+            streetLat[streetId].first = std::min(streetLat[streetId].first, curvePoint.latitude());
+            streetLat[streetId].second = std::max(streetLat[streetId].second, curvePoint.latitude());
+
+            streetLon[streetId].first = std::min(streetLon[streetId].first, curvePoint.longitude());
+            streetLon[streetId].second = std::max(streetLon[streetId].second, curvePoint.longitude());
+        }
+
     }
 }
