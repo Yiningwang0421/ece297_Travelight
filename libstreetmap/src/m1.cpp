@@ -415,38 +415,6 @@ std::string getOSMNodeTagValue(OSMID osm_id, std::string key){
 }
 
 
-//helper function for finding non straight street
-LatLon getClosestSegment(StreetSegmentIdx segmentID, IntersectionIdx intersection)
-{
-    StreetSegmentInfo segmentInfo = getStreetSegmentInfo(segmentID); //getting the first street segment information
-    LatLon IntersectionPos = getIntersectionPosition(intersection);
-    if (segmentInfo.numCurvePoints > 0)
-    {
-        LatLon closestPT = getStreetSegmentCurvePoint(segmentID, 0); // setting a first segment to compare with
-        double minimum = findDistanceBetweenTwoPoints(IntersectionPos, closestPT);
-        for (int currID = 1; currID < segmentInfo.numCurvePoints; currID++)
-        { // for the later curve point on segment
-            LatLon curvePT = getStreetSegmentCurvePoint(segmentID, currID);
-            double curveDis = findDistanceBetweenTwoPoints(IntersectionPos, curvePT);
-            if (curveDis < minimum)
-            {
-                minimum = curveDis;
-                closestPT = curvePT;
-            }
-        }
-        return closestPT; //the latest curvepoint returned
-    }
-    //straight street
-    if (segmentInfo.to == intersection)
-    {
-        return getIntersectionPosition(segmentInfo.from);
-    }
-    else
-    {
-        return getIntersectionPosition(segmentInfo.to);
-    }
-}
-
 void preprocessStreetSegments(){
 
     int numStreets = getNumStreets();
