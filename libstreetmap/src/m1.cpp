@@ -266,6 +266,21 @@ double findStreetSegmentTurnAngle(StreetSegmentIdx src_street_segment_id, Street
     return M_PI - turnAngle;
 }
 
+double findStreetLength(StreetIdx street_id){
+
+    double totalLength = 0.0;
+        if (street_id >= 0 && street_id < streetSegmentVector.size()){
+        
+            const std::vector<StreetSegmentIdx>& segmentsOfStreetId = streetSegmentVector[street_id];
+            for (StreetSegmentIdx i = 0; i < segmentsOfStreetId.size(); i++) {
+            
+            totalLength += segmentData[segmentsOfStreetId[i]].first;
+        
+        }
+    }
+}
+
+
 double findWayLength(OSMID way_id) {
     int wayIndex = getWayIndexFromOSMID(way_id);
     if (wayIndex == -1) return 0.0;  
