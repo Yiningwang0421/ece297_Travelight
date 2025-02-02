@@ -387,7 +387,16 @@ std::vector<StreetSegmentIdx> findStreetSegmentsOfIntersection (IntersectionIdx 
 // Speed Requirement --> high
 
 std::vector<IntersectionIdx> findIntersectionsOfStreet(StreetIdx street_id) {
-    return std::vector<IntersectionIdx>();
+    std::vector<IntersectionIdx> intersections;
+    for (StreetSegmentIdx i = 0; i < streetSegmentVector[street_id].size(); i++) {
+        intersections.push_back(getStreetSegmentInfo(streetSegmentVector[street_id][i]).from);
+        intersections.push_back(getStreetSegmentInfo(streetSegmentVector[street_id][i]).to);
+    }
+    std::vector<int>::iterator ip;
+    std::sort(intersections.begin(), intersections.end());
+    ip = std::unique(intersections.begin(), intersections.begin() + intersections.size());
+    intersections.resize(std::distance(intersections.begin(), ip));
+    return intersections;
 }
 
 // Return all intersection ids at which the two given streets intersect.
@@ -480,3 +489,4 @@ void preprocessStreetSegments() {
 
     }
 }
+
