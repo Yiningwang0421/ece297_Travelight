@@ -46,10 +46,14 @@
 
 // Global nested vector: Index is streetId, value is a vector of segment IDs
 std::vector<std::vector<StreetSegmentIdx>> streetSegmentVector;
-std::vector<std::pair<double, double>> segmentData;   //  First = length, Second = speed limit
-std::vector<std::pair<LatLon, LatLon>> segmentLatLon; // Stores (from, to) LatLon for each segment
-std::vector<std::pair<double, double>> streetLat;     // Stores (min_lat, max_lat) for each street
-std::vector<std::pair<double, double>> streetLon;     // Stores (min_lon, max_lon) for each street
+std::vector<std::vector<IntersectionIdx>> intersectionVector; //First
+std::vector<std::pair<double, double>> segmentData;  //  First = length, Second = speed limit
+std::vector<std::pair<LatLon, LatLon>> segmentLatLon;  // Stores (from, to) LatLon for each segment
+std::vector<std::pair<double, double>> streetLat;  // Stores (min_lat, max_lat) for each street
+std::vector<std::pair<double, double>> streetLon;  // Stores (min_lon, max_lon) for each street
+
+
+void preprocessStreetSegments(); 
 
 std::unordered_map<OSMID, int> osmidToNodeMap;
 std::unordered_map<OSMID, int> osmidToWayMap;
@@ -126,8 +130,8 @@ bool loadMap(std::string map_streets_database_filename) {
             }
         }
     }
-
-
+    
+    
     for(int i = 0; i < getNumberOfNodes(); i++){
         const OSMNode* node = getNodeByIndex(i);
         OSMID nodeId = node ->  id();
@@ -428,9 +432,26 @@ std::vector<IntersectionIdx> findIntersectionsOfStreet(StreetIdx street_id) {
 // streets cross.
 // There should be no duplicate intersections in the returned vector.
 // Speed Requirement --> high
-std::vector<IntersectionIdx> findIntersectionsOfTwoStreets(std::pair<StreetIdx, StreetIdx> street_ids)
-{
-    return std::vector<IntersectionIdx>();
+
+
+std::vector<IntersectionIdx> findIntersectionsOfTwoStreets(std::pair<StreetIdx, StreetIdx> street_ids) {
+    
+    //Find overlapping intersections between two streets
+    std::vector<IntersectionIdx> twoStreetIntersections = {};
+    auto begin = intersectionVector[street_ids.second].begin();
+    auto end = intersectionVector[street_ids.second].end();
+    for (int i = 0; i < intersectionVector[street_ids.first].size(); i++) {
+        if (find(begin, end, intersectionVector[street_ids.first][i]) != end) {
+            twoStreetIntersections.push_back(intersectionVector[street_ids.first][i]);
+        }
+    }
+    
+    //Remove duplicates from the overlapping intersection vector
+    std::vector<int>::iterator ip;
+    std::sort(twoStreetIntersections.begin(), twoStreetIntersections.end());
+    ip = std::unique(twoStreetIntersections.begin(), twoStreetIntersections.begin() + twoStreetIntersections.size());
+    twoStreetIntersections.resize(std::distance(twoStreetIntersections.begin(), ip));    
+    return twoStreetIntersections;
 }
 
 // Returns all street ids corresponding to street names that start with the
@@ -468,6 +489,7 @@ void preprocessStreetSegments(){
 
     int numStreets = getNumStreets();
     streetSegmentVector.resize(numStreets);
+    intersectionVector.resize(numStreets);
     int numSegments = getNumStreetSegments();
     segmentData.resize(numSegments);
 
@@ -480,7 +502,9 @@ void preprocessStreetSegments(){
     for (int segmentId = 0; segmentId < getNumStreetSegments(); segmentId++){
         StreetSegmentInfo segmentInfo = getStreetSegmentInfo(segmentId);
         streetSegmentVector[segmentInfo.streetID].push_back(segmentId);
-        ////////////////////
+        intersectionVector[segmentInfo.streetID].push_back(segmentInfo.from);
+        intersectionVector[segmentInfo.streetID].push_back(segmentInfo.to);
+////////////////////        
         double segmentLength = findStreetSegmentLength(segmentId);
         segmentData[segmentId] = {segmentLength, segmentInfo.speedLimit};
         ///////////////////
