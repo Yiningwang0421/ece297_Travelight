@@ -373,9 +373,19 @@ std::vector<StreetSegmentIdx> findStreetSegmentsOfIntersection(IntersectionIdx i
 // Returns all intersections along the given street.
 // There should be no duplicate intersections in the returned vector.
 // Speed Requirement --> high
-std::vector<IntersectionIdx> findIntersectionsOfStreet(StreetIdx street_id)
-{
-    return std::vector<IntersectionIdx>();
+
+
+std::vector<IntersectionIdx> findIntersectionsOfStreet(StreetIdx street_id) {
+    std::vector<IntersectionIdx> intersections;
+    for (StreetSegmentIdx i = 0; i < streetSegmentVector[street_id].size(); i++) {
+        intersections.push_back(getStreetSegmentInfo(streetSegmentVector[street_id][i]).from);
+        intersections.push_back(getStreetSegmentInfo(streetSegmentVector[street_id][i]).to);
+    }
+    std::vector<int>::iterator ip;
+    std::sort(intersections.begin(), intersections.end());
+    ip = std::unique(intersections.begin(), intersections.begin() + intersections.size());
+    intersections.resize(std::distance(intersections.begin(), ip));
+    return intersections;
 }
 
 // Return all intersection ids at which the two given streets intersect.
@@ -409,10 +419,9 @@ std::vector<StreetIdx> findStreetIdsFromPartialStreetName(std::string street_pre
 
 
 std::string getOSMNodeTagValue(OSMID osm_id, std::string key){
-    std::unordered_map<OSMID, std::unordered_map<std::string, std::string>>::iterator currNode = OSMvec.find(osm_id);
-    if(currNode != OSMvec.end()){ //starting to find the  key value inside the OSMNode
-        std::unordered_map<std::string, std::string>::iterator currTag = currNode -> second.find(key);  // the curret one tag  has the node tag information
-        if(currTag != currNode -> second.end()){
+    if(OSMvec.find(osm_id) != OSMvec.end()){ //starting to find the  key value inside the OSMNode
+        std::unordered_map<std::string, std::string>::iterator currTag = OSMvec.find(osm_id) -> second.find(key);  // the curret one tag  has the node tag information
+        if(currTag != OSMvec.find(osm_id) -> second.end()){
             return  currTag -> second;
         }
     }
@@ -516,4 +525,5 @@ void preprocessMappings() {
         convertedWayIndex[i] = std::move(nodeIndices);  
     }
 }
+
 
