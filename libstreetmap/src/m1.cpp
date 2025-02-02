@@ -160,8 +160,17 @@ void closeMap()
     OSMvec.clear();
     closeStreetDatabase();
     closeOSMDatabase();
+    
     streetSegmentVector.clear();
     segmentData.clear();
+    segmentLatLon.clear();
+    streetLat.clear();
+    streetLon.clear();
+    
+    osmidToNodeMap.clear();
+    osmidToWayMap.clear();
+    convertedWayIndex.clear();
+
 }
 
 // Returns the distance between two (latitude, longitude) coordinates in meters.
@@ -265,18 +274,58 @@ double findStreetSegmentTurnAngle(StreetSegmentIdx src_street_segment_id, Street
     return M_PI - turnAngle;
 }
 
-double findStreetLength(StreetIdx street_id){
-
+double findStreetLength(StreetIdx street_id) {
     double totalLength = 0.0;
-        if (street_id >= 0 && street_id < streetSegmentVector.size()){
+
+    if (street_id < 0 || street_id >= (streetSegmentVector.size())){
+        return 0.0;
+    }
+
+    const std::vector<StreetSegmentIdx>& segmentsOfStreetId = streetSegmentVector[street_id];
+
+    for (int i = 0; i < segmentsOfStreetId.size(); i++) {
+        StreetSegmentIdx segmentId = segmentsOfStreetId[i];
+
+        // Ensure segmentIdx is valid 
+        if (segmentId < 0 || segmentId >= (segmentData.size())) {
+            continue;
+        }
+
+        totalLength += segmentData[segmentId].first;
+    }
+
+    return totalLength;
+}
+
+double findFeatureArea(FeatureIdx feature_id) {
+    int numOfPoints = getNumFeaturePoints(feature_id);
+    double area = 0.0;
+    
+    //Check if the feature is closed
+    if (numOfPoints >= 3 && (getFeaturePoint(feature_id,0).latitude() == getFeaturePoint(feature_id, numOfPoints-1).latitude())
+            && (getFeaturePoint(feature_id,0).longitude() == getFeaturePoint(feature_id, numOfPoints-1).longitude())) {
         
-            const std::vector<StreetSegmentIdx>& segmentsOfStreetId = streetSegmentVector[street_id];
-            for (StreetSegmentIdx i = 0; i < segmentsOfStreetId.size(); i++) {
-            
-            totalLength += segmentData[segmentsOfStreetId[i]].first;
+        //Calculate the average latitude of the feature
+        double avgLat = 0;
+        for (int i=0; i<numOfPoints-1; i++){
+            avgLat = avgLat + getFeaturePoint(feature_id, i).latitude();
+        }
+        avgLat = avgLat/(numOfPoints - 1);
         
+        //Calculate the area of the feature using trapezoid formula
+        double xi = 0.0;
+        double x2 = 0.0;
+        double yi = 0.0;
+        double y2 = 0.0;
+        for (int i = 0; i < numOfPoints - 1; i++) {
+            xi = kEarthRadiusInMeters * getFeaturePoint(feature_id, i).longitude() * cos(kDegreeToRadian * avgLat);
+            yi = kEarthRadiusInMeters * getFeaturePoint(feature_id, i).latitude();
+            x2 = kEarthRadiusInMeters * getFeaturePoint(feature_id, i + 1).longitude() * cos(kDegreeToRadian * avgLat);
+            y2 = kEarthRadiusInMeters * getFeaturePoint(feature_id, i + 1).latitude();
+            area = area + 0.5 * (yi + y2)*(xi - x2)/3282.81;
         }
     }
+    return abs(area);
 }
 
 
