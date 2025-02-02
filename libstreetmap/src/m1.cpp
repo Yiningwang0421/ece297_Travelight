@@ -429,10 +429,9 @@ std::vector<StreetIdx> findStreetIdsFromPartialStreetName(std::string street_pre
 }
 
 std::string getOSMNodeTagValue(OSMID osm_id, std::string key){
-    std::unordered_map<OSMID, std::unordered_map<std::string, std::string>>::iterator currNode = OSMvec.find(osm_id);
-    if(currNode != OSMvec.end()){ //starting to find the  key value inside the OSMNode
-        std::unordered_map<std::string, std::string>::iterator currTag = currNode -> second.find(key);  // the curret one tag  has the node tag information
-        if(currTag != currNode -> second.end()){
+    if(OSMvec.find(osm_id) != OSMvec.end()){ //starting to find the  key value inside the OSMNode
+        std::unordered_map<std::string, std::string>::iterator currTag = OSMvec.find(osm_id) -> second.find(key);  // the curret one tag  has the node tag information
+        if(currTag != OSMvec.find(osm_id) -> second.end()){
             return  currTag -> second;
         }
     }
