@@ -27,6 +27,9 @@
 #include <vector>
 #include <unordered_set>
 #include <utility>
+#include <unordered_map>
+
+
 
 // loadMap will be called with the name of the file that stores the "layer-2"
 // map data accessed through StreetsDatabaseAPI: the street and intersection
@@ -48,9 +51,9 @@ std::vector<std::pair<LatLon, LatLon>> segmentLatLon; // Stores (from, to) LatLo
 std::vector<std::pair<double, double>> streetLat;     // Stores (min_lat, max_lat) for each street
 std::vector<std::pair<double, double>> streetLon;     // Stores (min_lon, max_lon) for each street
 
-std::vector<OSMID> osmidToNodeIndex;  // Node Index → OSMID
-std::vector<OSMID> osmidToWayIndex;   // Way Index → OSMID
-std::vector<std::vector<int>> convertedWayIndex; // Way Index → List of Nodes
+std::unordered_map<OSMID, int> osmidToNodeMap;
+std::unordered_map<OSMID, int> osmidToWayMap;
+std::vector<std::vector<int>> convertedWayIndex;  // Stores node indices 
 
 
 void preprocessStreetSegments();
@@ -61,8 +64,12 @@ int getWayIndexFromOSMID(OSMID way_id);
 //global variables for function usage
 std::vector<std::vector<StreetSegmentIdx>> intersection_street_segments;
 std::vector<std::vector<IntersectionIdx>> adjacent_street_segments;
-bool loadMap(std::string map_streets_database_filename)
-{
+
+std::unordered_map<OSMID, std::unordered_map<std::string, std::string>> OSMvec;
+bool loadMap(std::string map_streets_database_filename) {
+
+
+
 
     bool load_successful = loadStreetsDatabaseBIN(map_streets_database_filename); //Indicates whether the map has loaded
                                                                                   //successfully
@@ -74,7 +81,14 @@ bool loadMap(std::string map_streets_database_filename)
     //
     // Load your map related data structures here.
     //
-    // findStreetSegmentsOfIntersection()
+    std::string osm_mapfilename = map_streets_database_filename;
+    osm_mapfilename.replace(osm_mapfilename.find(".street"), 8, ".osm");
+    bool osmload_successful = loadOSMDatabaseBIN(osm_mapfilename);
+    std::cout<<"loadMap: "<<  osm_mapfilename << std::endl;
+    if(osmload_successful == false){
+        return false;
+    }
+
     intersection_street_segments.resize(getNumIntersections());
     adjacent_street_segments.resize(getNumIntersections());
 
@@ -82,8 +96,7 @@ bool loadMap(std::string map_streets_database_filename)
     {
         int segments = getNumIntersectionStreetSegment(intersection_id);
 
-        for (int i = 0; i < segments; i++)
-        {
+        for(int i = 0; i < segments; i++){
             StreetSegmentIdx ss_id = getIntersectionStreetSegment(intersection_id, i); //finding  the streetsegment intersection
             intersection_street_segments[intersection_id].push_back(ss_id);
             StreetSegmentInfo ss_info = getStreetSegmentInfo(ss_id); // get each street's info
@@ -102,9 +115,9 @@ bool loadMap(std::string map_streets_database_filename)
             { //corner case for cul-de-sacs
                 adjacent = ss_info.to;
             }
-            //no  duplicate intersection
-            if (std::find(adjacent_street_segments[intersection_id].begin(), adjacent_street_segments[intersection_id].end(), adjacent) == adjacent_street_segments[intersection_id].end())
-            {
+
+            //no duplicate happens
+            if(std::find(adjacent_street_segments[intersection_id].begin(), adjacent_street_segments[intersection_id].end(), adjacent) == adjacent_street_segments[intersection_id].end()){
                 uniqueAdjSegment = true;
             }
             if (adjacent != 0 && uniqueAdjSegment == true)
@@ -113,6 +126,21 @@ bool loadMap(std::string map_streets_database_filename)
             }
         }
     }
+
+
+    for(int i = 0; i < getNumberOfNodes(); i++){
+        const OSMNode* node = getNodeByIndex(i);
+        OSMID nodeId = node ->  id();
+        std::unordered_map<std::string, std::string> storeTag;
+        int nodeTag= getTagCount(node);
+
+        for(int j = 0; j < nodeTag; j++){
+            std::pair<std::string, std::string> tagPair =  getTagPair(node, j);
+            storeTag[tagPair.first] = tagPair.second; //letting the index spot at map gets the value
+        }
+        OSMvec[nodeId] = storeTag;
+    }
+
 
     load_successful = true; //Make sure this is updated to reflect whether
                             //loading the map succeeded or failed
@@ -128,7 +156,10 @@ void closeMap()
 {
     //Clean-up your map related data structures here
     intersection_street_segments.clear();
+    adjacent_street_segments.clear();
+    OSMvec.clear();
     closeStreetDatabase();
+    closeOSMDatabase();
     streetSegmentVector.clear();
     segmentData.clear();
 }
@@ -265,33 +296,25 @@ double findStreetSegmentTurnAngle(StreetSegmentIdx src_street_segment_id, Street
     return M_PI - turnAngle;
 }
 
-double findWayLength(OSMID way_id)
-{
+double findWayLength(OSMID way_id) {
     int wayIndex = getWayIndexFromOSMID(way_id);
-    if (wayIndex == -1){
-        std::cout<<"gg ";
-        return 0.0; 
-        } // Way not found
+    if (wayIndex == -1) return 0.0;  
 
     const std::vector<int>& nodeIndices = convertedWayIndex[wayIndex];
-    if (nodeIndices.size() < 2){
-        std::cout<<"gg ";
-        return 0.0;
-        }   // Not enough nodes
+    
+    if (nodeIndices.size() < 2) return 0.0;  // Not enough nodes
 
     double totalLength = 0.0;
 
-    // Compute distances between consecutive nodes
     for (int i = 1; i < nodeIndices.size(); i++) {
-        LatLon point1 = getNodeCoords(getNodeByIndex(nodeIndices[i - 1]));
-        LatLon point2 = getNodeCoords(getNodeByIndex(nodeIndices[i]));
-
-        totalLength += findDistanceBetweenTwoPoints(point1, point2);
+        totalLength += findDistanceBetweenTwoPoints(
+            getNodeCoords(getNodeByIndex(nodeIndices[i - 1])),
+            getNodeCoords(getNodeByIndex(nodeIndices[i]))
+        );
     }
 
     return totalLength;
 }
-
 LatLonBounds findStreetBoundingBox(StreetIdx street_id)
 {
     LatLon minLatLon(streetLat[street_id].first, streetLon[street_id].first);
@@ -384,13 +407,24 @@ std::vector<StreetIdx> findStreetIdsFromPartialStreetName(std::string street_pre
     return std::vector<StreetIdx>();
 }
 
-std::string getOSMNodeTagValue(OSMID osm_id, std::string key)
-{
-    return std::string();
+
+std::string getOSMNodeTagValue(OSMID osm_id, std::string key){
+    std::unordered_map<OSMID, std::unordered_map<std::string, std::string>>::iterator currNode = OSMvec.find(osm_id);
+    if(currNode != OSMvec.end()){ //starting to find the  key value inside the OSMNode
+        std::unordered_map<std::string, std::string>::iterator currTag = currNode -> second.find(key);  // the curret one tag  has the node tag information
+        if(currTag != currNode -> second.end()){
+            return  currTag -> second;
+        }
+    }
+    else{
+        return "";
+    }
 }
 
-void preprocessStreetSegments()
-{
+
+
+void preprocessStreetSegments(){
+
     int numStreets = getNumStreets();
     streetSegmentVector.resize(numStreets);
     int numSegments = getNumStreetSegments();
@@ -402,8 +436,7 @@ void preprocessStreetSegments()
     streetLon.resize(numStreets, {10000000, -10000000});
 
     // Loop through all street segments and store coresponding info in the corresponding vectors
-    for (int segmentId = 0; segmentId < getNumStreetSegments(); segmentId++)
-    {
+    for (int segmentId = 0; segmentId < getNumStreetSegments(); segmentId++){
         StreetSegmentInfo segmentInfo = getStreetSegmentInfo(segmentId);
         streetSegmentVector[segmentInfo.streetID].push_back(segmentId);
         ////////////////////
@@ -439,54 +472,48 @@ void preprocessStreetSegments()
 
 
 
+int getNodeIndexFromOSMID(OSMID node_id) {
+    auto it = osmidToNodeMap.find(node_id);
+    if (it == osmidToNodeMap.end()) return -1;
+    return it->second;
+}
+
+int getWayIndexFromOSMID(OSMID way_id) {
+    auto it = osmidToWayMap.find(way_id);
+    if (it == osmidToWayMap.end()) return -1;
+    return it->second;
+}
+
 void preprocessMappings() {
     int numNodes = getNumberOfNodes();
     int numWays = getNumberOfWays();
 
-    // Resize vectors 
-    osmidToNodeIndex.resize(1000000000, OSMID());
-    osmidToWayIndex.resize(1000000000, OSMID());
-    convertedWayIndex.resize(1000000000); 
+    osmidToNodeMap.reserve(numNodes);
+    osmidToWayMap.reserve(numWays);
+    convertedWayIndex.resize(numWays);
 
-    // Fill Node Index → OSMID
     for (int i = 0; i < numNodes; i++) {
-        osmidToNodeIndex[i] = getNodeByIndex(i)->id();
+        OSMID nodeID = getNodeByIndex(i)->id();
+        osmidToNodeMap[nodeID] = i;
     }
 
-    // Convert Way Nodes from OSMIDs 
+    // Store Way OSMID to Index AND Convert Way Nodes 
     for (int i = 0; i < numWays; i++) {
-        osmidToWayIndex[i] = getWayByIndex(i)->id();
+        OSMID wayID = getWayByIndex(i)->id();
+        osmidToWayMap[wayID] = i;
 
-        std::vector<OSMID> wayNodes = getWayMembers(getWayByIndex(i));
         std::vector<int> nodeIndices;
+        const std::vector<OSMID>& wayNodes = getWayMembers(getWayByIndex(i));
+        nodeIndices.reserve(wayNodes.size());  
 
-        for (int j = 0; j < wayNodes.size(); j++) {
-            for (int k = 0; k < numNodes; k++) {
-                if (osmidToNodeIndex[k] == wayNodes[j]) {
-                    nodeIndices.push_back(k);
-                    break;
-                }
+        for (int j = 0; j < wayNodes.size(); j++) {  
+            auto it = osmidToNodeMap.find(wayNodes[j]);
+            if (it != osmidToNodeMap.end()) {  
+                nodeIndices.push_back(it->second);
             }
         }
 
-        convertedWayIndex[i] = nodeIndices; // Store node 
+        convertedWayIndex[i] = std::move(nodeIndices);  
     }
 }
 
-int getNodeIndexFromOSMID(OSMID node_id) {
-    for (int i = 0; i < osmidToNodeIndex.size(); i++) {
-        if (osmidToNodeIndex[i] == node_id) {
-            return i;
-        }
-    }
-    return -1;  // Not found
-}
-
-int getWayIndexFromOSMID(OSMID way_id) {
-    for (int i = 0; i < osmidToWayIndex.size(); i++) {
-        if (osmidToWayIndex[i] == way_id) {
-            return i;
-        }
-    }
-    return -1;  // Not found
-}
