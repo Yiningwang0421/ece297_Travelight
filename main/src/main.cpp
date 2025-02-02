@@ -68,6 +68,20 @@ int main(int argc, char** argv) {
     //You can now do something with the map data
 
 
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
     //Clean-up the map data and related data structures
     std::cout << "Closing map\n";
     closeMap(); 
