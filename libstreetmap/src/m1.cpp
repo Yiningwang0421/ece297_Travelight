@@ -28,6 +28,9 @@
 #include <unordered_set>
 #include <utility>
 #include <unordered_map>
+#include <string>
+#include <cctype>
+#include <map>
 
 
 
@@ -46,7 +49,9 @@
 
 // Global nested vector: Index is streetId, value is a vector of segment IDs
 std::vector<std::vector<StreetSegmentIdx>> streetSegmentVector;
-std::vector<std::vector<IntersectionIdx>> intersectionVector; //First
+
+std::vector<std::vector<IntersectionIdx>> intersectionVector;
+std::map<std::string, std::vector<StreetIdx>> streetNameCollections;
 std::vector<std::pair<double, double>> segmentData;  //  First = length, Second = speed limit
 std::vector<std::pair<LatLon, LatLon>> segmentLatLon;  // Stores (from, to) LatLon for each segment
 std::vector<std::pair<double, double>> streetLat;  // Stores (min_lat, max_lat) for each street
@@ -54,6 +59,7 @@ std::vector<std::pair<double, double>> streetLon;  // Stores (min_lon, max_lon) 
 
 
 void preprocessStreetSegments(); 
+void preprocessStreets();
 
 std::unordered_map<OSMID, int> osmidToNodeMap;
 std::unordered_map<OSMID, int> osmidToWayMap;
@@ -152,6 +158,7 @@ bool loadMap(std::string map_streets_database_filename) {
 
     preprocessStreetSegments();
     preprocessMappings();
+    preprocessStreets();
 
     return load_successful;
 }
@@ -468,7 +475,31 @@ std::vector<IntersectionIdx> findIntersectionsOfTwoStreets(std::pair<StreetIdx, 
 // Speed Requirement --> high
 std::vector<StreetIdx> findStreetIdsFromPartialStreetName(std::string street_prefix)
 {
-    return std::vector<StreetIdx>();
+    std::vector<StreetIdx> streetsFound = {};
+    int length = street_prefix.length();
+    std::string prefixNoSpace = "";
+    
+    //Check if the prefix is empty
+    if (street_prefix != ""){
+        
+        //Lowercase the prefix and remove white spaces in between
+        for(int i = 0; i<length; i++){
+            if(street_prefix[i] != ' ')
+                prefixNoSpace += std::tolower(static_cast<unsigned char>(street_prefix[i]));               
+        }
+
+        //Search for street names that contain the prefix
+        auto it = streetNameCollections.lower_bound(prefixNoSpace);
+        while (it != streetNameCollections.end() && it->first.compare(0,prefixNoSpace.length(),prefixNoSpace) == 0){
+            streetsFound.insert(streetsFound.end(), it->second.begin(), it->second.end());
+            ++it;
+        }
+        std::vector<int>::iterator ip;
+        std::sort(streetsFound.begin(), streetsFound.end());
+        ip = std::unique(streetsFound.begin(), streetsFound.begin() + streetsFound.size());
+        streetsFound.resize(std::distance(streetsFound.begin(), ip)); 
+    }
+    return streetsFound;
 }
 
 
@@ -535,7 +566,18 @@ void preprocessStreetSegments(){
     }
 }
 
-
+void preprocessStreets() {
+    int numStreet = getNumStreets();
+    std::string nameNoSpace;
+    for (StreetIdx i = 0; i < numStreet; i++) {
+        nameNoSpace = "";
+        for (int k = 0; k < getStreetName(i).length(); k++) {
+            if (getStreetName(i)[k] != ' ')
+                nameNoSpace += std::tolower(static_cast<unsigned char>(getStreetName(i)[k]));
+        }
+        streetNameCollections[nameNoSpace].push_back(i);
+    }
+}
 
 int getNodeIndexFromOSMID(OSMID node_id) {
     auto it = osmidToNodeMap.find(node_id);
