@@ -66,7 +66,6 @@ std::unordered_map<OSMID, int> osmidToWayMap;
 std::vector<std::vector<int>> convertedWayIndex;  // Stores node indices 
 
 LatLon getClosestSegment(StreetSegmentIdx segmentID, IntersectionIdx intersection);
-void preprocessStreetSegments();
 void preprocessMappings();
 int getNodeIndexFromOSMID(OSMID node_id);
 int getWayIndexFromOSMID(OSMID way_id);
