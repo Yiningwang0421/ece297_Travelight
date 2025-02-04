@@ -250,10 +250,10 @@ double findStreetSegmentTurnAngle(StreetSegmentIdx src_street_segment_id, Street
     StreetSegmentInfo dst_info = getStreetSegmentInfo(dst_street_id);
     IntersectionIdx intersection = -1;
     // checking intersection category
-    if (src_info.to == dst_info.from  || src_info.to ==  dst_info.to){
+    if (src_info.to == dst_info.from  || src_info.to ==  dst_info.to){ //head intersection
         intersection =  src_info.to;
     }
-    else if (src_info.from == dst_info.to || src_info.from == dst_info.from)
+    else if (src_info.from == dst_info.to || src_info.from == dst_info.from) //end intersection
     {
         intersection = src_info.from;
     }
@@ -265,15 +265,15 @@ double findStreetSegmentTurnAngle(StreetSegmentIdx src_street_segment_id, Street
     //finding each street segment direction
     LatLon intersectionPos = getIntersectionPosition(intersection);
     LatLon srcPT, dstPT;
-    if(src_info.numCurvePoints > 0){
-        if(src_info.to == intersection){
+    if(src_info.numCurvePoints > 0){ //if having intersection and have curve point on src
+        if(src_info.to == intersection){ //find closest curvepoint from end
             srcPT = getStreetSegmentCurvePoint(src_street_segment_id, src_info.numCurvePoints - 1);
         }
-        else{
+        else{ //find closest curvepoint from the head
             srcPT = getStreetSegmentCurvePoint(src_street_segment_id, 0);
         }
     }
-    else{
+    else{ //straight src street
         if(src_info.to == intersection){
             srcPT = getIntersectionPosition(src_info.from);
         }
@@ -282,15 +282,15 @@ double findStreetSegmentTurnAngle(StreetSegmentIdx src_street_segment_id, Street
         }
     }
 
-    if(dst_info.numCurvePoints > 0){
-        if(dst_info.to == intersection){
+    if(dst_info.numCurvePoints > 0){ //if  having intersection around dst, check the closest curvepoint
+        if(dst_info.to == intersection){ // if intersect at the dst end
             dstPT = getStreetSegmentCurvePoint(dst_street_id, dst_info.numCurvePoints - 1);
         }
-        else{
-            dstPT = getStreetSegmentCurvePoint(dst_street_id, 0);
+        else{ // if intersect from the head
+            dstPT = getStreetSegmentCurvePoint(dst_street_id, 0); 
         }
     }
-    else{
+    else{ //straight dst street
         if(dst_info.to == intersection){
             dstPT = getIntersectionPosition(dst_info.from);
         }
@@ -299,22 +299,11 @@ double findStreetSegmentTurnAngle(StreetSegmentIdx src_street_segment_id, Street
         }
     }
 
-    //finding directional vector for each streetsegment
+    //finding distance for street segment at an intersection
     double a = findDistanceBetweenTwoPoints(intersectionPos, srcPT);
     double b = findDistanceBetweenTwoPoints(intersectionPos, dstPT);
     double c = findDistanceBetweenTwoPoints(srcPT, dstPT);
-    if(a==0|| b == 0){
-        return NO_ANGLE;
-    }
     double cos_theta = (a*a + b*b  - c*c) / (2*a*b);;
-    // double srcX  =  srcPT.longitude() - intersectionPos.longitude();
-    // double srcY = srcPT.latitude() -  intersectionPos.latitude();
-    // double dstX  = dstPT.longitude() - intersectionPos.longitude();
-    // double dstY  = dstPT.latitude() - intersectionPos.latitude();
-    // double dotP = (srcX*dstX) + (srcY*dstY);
-    // double srcMag  = sqrt(srcX*srcX + srcY*srcY);
-    // double dstMag = sqrt(dstX*dstX + dstY*dstY);
-    // double cos_theta = dotP / (srcMag *  dstMag);
     // constrain the  range of cosine into [-1, 1] with correcting tiny out of range
     if(cos_theta > 1){
         cos_theta = 1;
@@ -551,9 +540,7 @@ std::string getOSMNodeTagValue(OSMID osm_id, std::string key){
             return  currTag -> second;
         }
     }
-    else{
-        return "";
-    }
+    return "";
 }
 
 
@@ -662,41 +649,5 @@ void preprocessMappings() {
         }
 
         convertedWayIndex[i] = std::move(nodeIndices);  
-    }
-}
-
-
-//helper function for finding non straight street
-LatLon getClosestSegment(StreetSegmentIdx segmentID, IntersectionIdx intersection)
-{
-    StreetSegmentInfo segmentInfo = getStreetSegmentInfo(segmentID); //getting the first street segment information
-    LatLon IntersectionPos = getIntersectionPosition(intersection);
-    if (segmentInfo.numCurvePoints > 0)
-    {
-        LatLon closestPT = getStreetSegmentCurvePoint(segmentID, 0); // setting a first segment to compare with
-        if(std::isnan(closestPT.longitude()) || std::isnan(closestPT.latitude())){
-            return IntersectionPos;
-        }
-        double minimum = findDistanceBetweenTwoPoints(IntersectionPos, closestPT);
-        for (int currID = 1; currID < segmentInfo.numCurvePoints; currID++)
-        { // for the later curve point on segment
-            LatLon curvePT = getStreetSegmentCurvePoint(segmentID, currID);
-            double curveDis = findDistanceBetweenTwoPoints(IntersectionPos, curvePT);
-            if (curveDis < minimum)
-            {
-                minimum = curveDis;
-                closestPT = curvePT;
-            }
-        }
-        return closestPT; //the latest curvepoint returned
-    }
-    //straight street
-    if (segmentInfo.to == intersection)
-    {
-        return getIntersectionPosition(segmentInfo.from);
-    }
-    else
-    {
-        return getIntersectionPosition(segmentInfo.to);
     }
 }
