@@ -47,19 +47,20 @@
 // ".streets" to ".osm" in the map_streets_database_filename to get the proper
 // name.
 
-// Global nested vector: Index is streetId, value is a vector of segment IDs
-std::vector<std::vector<StreetSegmentIdx>> streetSegmentVector;
-
-std::vector<std::vector<IntersectionIdx>> intersectionVector;
-std::map<std::string, std::vector<StreetIdx>> streetNameCollections;
+// Global nested vector: Index is streetId, value is a vector of segment ID
+std::vector<std::vector<StreetSegmentIdx>> streetSegmentVector; 
 std::vector<std::pair<double, double>> segmentData;  //  First = length, Second = speed limit
 std::vector<std::pair<LatLon, LatLon>> segmentLatLon;  // Stores (from, to) LatLon for each segment
 std::vector<std::pair<double, double>> streetLat;  // Stores (min_lat, max_lat) for each street
 std::vector<std::pair<double, double>> streetLon;  // Stores (min_lon, max_lon) for each street
 
+std::vector<std::vector<StreetIdx>> intersectionVector; //Store all the intersections for each street
+std::map<std::string, std::vector<StreetIdx>> streetNameCollections; //Store all the lower-cased, whitespace-removed street names
 
+//Helper functions to preprocess data
 void preprocessStreetSegments(); 
 void preprocessStreets();
+std::vector<int> removeDuplicateElement(std::vector<int> v);
 
 std::unordered_map<OSMID, int> osmidToNodeMap;
 std::unordered_map<OSMID, int> osmidToWayMap;
@@ -454,11 +455,7 @@ std::vector<IntersectionIdx> findIntersectionsOfStreet(StreetIdx street_id) {
         intersections.push_back(getStreetSegmentInfo(streetSegmentVector[street_id][i]).from);
         intersections.push_back(getStreetSegmentInfo(streetSegmentVector[street_id][i]).to);
     }
-    std::vector<int>::iterator ip;
-    std::sort(intersections.begin(), intersections.end());
-    ip = std::unique(intersections.begin(), intersections.begin() + intersections.size());
-    intersections.resize(std::distance(intersections.begin(), ip));
-    return intersections;
+    return removeDuplicateElement(intersections);
 }
 
 // Return all intersection ids at which the two given streets intersect.
@@ -468,26 +465,19 @@ std::vector<IntersectionIdx> findIntersectionsOfStreet(StreetIdx street_id) {
 // streets cross.
 // There should be no duplicate intersections in the returned vector.
 // Speed Requirement --> high
-
-
 std::vector<IntersectionIdx> findIntersectionsOfTwoStreets(std::pair<StreetIdx, StreetIdx> street_ids) {
-    
-    //Find overlapping intersections between two streets
-    std::vector<IntersectionIdx> twoStreetIntersections = {};
+    std::vector<IntersectionIdx> twoStreetsIntersections = {};
     auto begin = intersectionVector[street_ids.second].begin();
     auto end = intersectionVector[street_ids.second].end();
+    
+    //Find intersections in street 2 that overlaps with street 1
     for (int i = 0; i < intersectionVector[street_ids.first].size(); i++) {
         if (find(begin, end, intersectionVector[street_ids.first][i]) != end) {
-            twoStreetIntersections.push_back(intersectionVector[street_ids.first][i]);
+            twoStreetsIntersections.push_back(intersectionVector[street_ids.first][i]);
         }
     }
-    
-    //Remove duplicates from the overlapping intersection vector
-    std::vector<int>::iterator ip;
-    std::sort(twoStreetIntersections.begin(), twoStreetIntersections.end());
-    ip = std::unique(twoStreetIntersections.begin(), twoStreetIntersections.begin() + twoStreetIntersections.size());
-    twoStreetIntersections.resize(std::distance(twoStreetIntersections.begin(), ip));    
-    return twoStreetIntersections;
+      
+    return removeDuplicateElement(twoStreetsIntersections);
 }
 
 // Returns all street ids corresponding to street names that start with the
@@ -511,7 +501,7 @@ std::vector<StreetIdx> findStreetIdsFromPartialStreetName(std::string street_pre
     //Check if the prefix is empty
     if (street_prefix != ""){
         
-        //Lowercase the prefix and remove white spaces in between
+        //Lowercase the prefix and remove white spaces within
         for(int i = 0; i<length; i++){
             if(street_prefix[i] != ' ')
                 prefixNoSpace += std::tolower(static_cast<unsigned char>(street_prefix[i]));               
@@ -523,12 +513,8 @@ std::vector<StreetIdx> findStreetIdsFromPartialStreetName(std::string street_pre
             streetsFound.insert(streetsFound.end(), it->second.begin(), it->second.end());
             ++it;
         }
-        std::vector<int>::iterator ip;
-        std::sort(streetsFound.begin(), streetsFound.end());
-        ip = std::unique(streetsFound.begin(), streetsFound.begin() + streetsFound.size());
-        streetsFound.resize(std::distance(streetsFound.begin(), ip)); 
     }
-    return streetsFound;
+    return removeDuplicateElement(streetsFound);
 }
 
 
@@ -593,15 +579,21 @@ void preprocessStreetSegments(){
     }
 }
 
+//Load all the street names in to a vector
+//The names are lower cased and white spaces are removed
 void preprocessStreets() {
     int numStreet = getNumStreets();
     std::string nameNoSpace;
     for (StreetIdx i = 0; i < numStreet; i++) {
         nameNoSpace = "";
+        
+        //Lowercase the street name and remove white spaces
         for (int k = 0; k < getStreetName(i).length(); k++) {
             if (getStreetName(i)[k] != ' ')
                 nameNoSpace += std::tolower(static_cast<unsigned char>(getStreetName(i)[k]));
         }
+        
+        //Store the adjusted street name
         streetNameCollections[nameNoSpace].push_back(i);
     }
 }
@@ -649,4 +641,13 @@ void preprocessMappings() {
 
         convertedWayIndex[i] = std::move(nodeIndices);  
     }
+}
+
+//Remove duplicate elements in an integer type vector
+std::vector<int> removeDuplicateElement(std::vector<int> v){
+    std::vector<int>::iterator ip;
+    std::sort(v.begin(), v.end());
+    ip = std::unique(v.begin(), v.begin() + v.size());
+    v.resize(std::distance(v.begin(), ip)); 
+    return v;
 }
