@@ -136,7 +136,7 @@ bool loadMap(std::string map_streets_database_filename) {
         }
     }
     
-    
+    //OSM storing the value from the map into the osm nodes with the tag pair of the key and value
     for(int i = 0; i < getNumberOfNodes(); i++){
         const OSMNode* node = getNodeByIndex(i);
         OSMID nodeId = node ->  id();
@@ -145,7 +145,7 @@ bool loadMap(std::string map_streets_database_filename) {
 
         for(int j = 0; j < nodeTag; j++){
             std::pair<std::string, std::string> tagPair =  getTagPair(node, j);
-            storeTag[tagPair.first] = tagPair.second; //letting the index spot at map gets the value
+            storeTag[tagPair.first] = tagPair.second; //give the corresponding index with the correct value
         }
         OSMvec[nodeId] = storeTag;
     }
