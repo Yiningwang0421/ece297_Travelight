@@ -89,7 +89,7 @@ bool loadMap(std::string map_streets_database_filename) {
     }
     //
     // Load your map related data structures here.
-    //
+    // load the street map and the osm map type
     std::string osm_mapfilename = map_streets_database_filename;
     osm_mapfilename.replace(osm_mapfilename.find(".street"), 8, ".osm");
     bool osmload_successful = loadOSMDatabaseBIN(osm_mapfilename);
@@ -112,19 +112,15 @@ bool loadMap(std::string map_streets_database_filename) {
             IntersectionIdx adjacent = 0;
             bool uniqueAdjSegment = false;
             //finding the adjacent point for forming a vector
-            if (ss_info.from == intersection_id)
-            {
+            if (ss_info.from == intersection_id){ //head intersection
                 adjacent = ss_info.to;
             }
-            else if (ss_info.to == intersection_id && !(ss_info.oneWay))
-            {
+            else if (ss_info.to == intersection_id && !(ss_info.oneWay)){  //end intersetion with one way direction
                 adjacent = ss_info.from;
             }
-            else if (ss_info.to == intersection_id && ss_info.from == intersection_id)
-            { //corner case for cul-de-sacs
+            else if (ss_info.to == intersection_id && ss_info.from == intersection_id){ //corner case for cul-de-sacs
                 adjacent = ss_info.to;
             }
-
             //no duplicate happens
             if(std::find(adjacent_street_segments[intersection_id].begin(), adjacent_street_segments[intersection_id].end(), adjacent) == adjacent_street_segments[intersection_id].end()){
                 uniqueAdjSegment = true;
@@ -141,10 +137,8 @@ bool loadMap(std::string map_streets_database_filename) {
         const OSMNode* node = getNodeByIndex(i);
         OSMID nodeId = node ->  id();
         std::unordered_map<std::string, std::string> storeTag;
-        int nodeTag= getTagCount(node);
-
-        for(int j = 0; j < nodeTag; j++){
-            std::pair<std::string, std::string> tagPair =  getTagPair(node, j);
+        for(int j = 0; j < getTagCount(node); j++){
+            std::pair<std::string, std::string> tagPair =  getTagPair(node, j); //check the pair for each node gone through
             storeTag[tagPair.first] = tagPair.second; //give the corresponding index with the correct value
         }
         OSMvec[nodeId] = storeTag;
@@ -243,21 +237,28 @@ double findStreetSegmentTravelTime(StreetSegmentIdx street_segment_id)
     return (speedLimit > 0) ? (segmentLength / speedLimit) : 0.0;
 }
 
-
+// Returns the angle (in radians) that you would need to turn as you exit
+// src_street_segment_id and enter dst_street_segment_id, if they share an
+// intersection.
+// If a street segment is not completely straight, use the last piece of the
+// segment closest to the shared intersection.
+// If the two street segments do not share an intersection, return a constant
+// NO_ANGLE, which is defined above.
+// Speed Requirement --> none
 double findStreetSegmentTurnAngle(StreetSegmentIdx src_street_segment_id, StreetSegmentIdx dst_street_id)
 {
     StreetSegmentInfo src_info = getStreetSegmentInfo(src_street_segment_id);
     StreetSegmentInfo dst_info = getStreetSegmentInfo(dst_street_id);
     IntersectionIdx intersection = -1;
     // checking intersection category
-    if (src_info.to == dst_info.from  || src_info.to ==  dst_info.to){ //head intersection
+    if (src_info.to == dst_info.from  || src_info.to ==  dst_info.to){ //head intersection from src
         intersection =  src_info.to;
     }
-    else if (src_info.from == dst_info.to || src_info.from == dst_info.from) //end intersection
+    else if (src_info.from == dst_info.to || src_info.from == dst_info.from) //end intersection from src
     {
         intersection = src_info.from;
     }
-    else
+    else //no intersection
     {
         return NO_ANGLE;
     }
@@ -317,6 +318,7 @@ double findStreetSegmentTurnAngle(StreetSegmentIdx src_street_segment_id, Street
 
 // Computes the total length of a given street by summing the lengths of its segments.
 // Returns 0.0 if the street_id is invalid.
+// Speed Requirement --> high
 double findStreetLength(StreetIdx street_id) {
     double totalLength = 0.0;
 
@@ -379,6 +381,7 @@ double findFeatureArea(FeatureIdx feature_id) {
 
 // Computes the total length of a way by summing the distances between consecutive nodes.
 // Returns 0.0 if the way_id is invalid or if there are fewer than two nodes.
+// Speed Requirement --> high
 double findWayLength(OSMID way_id) {
 
     // Convert OSM way ID to its internal index
@@ -405,6 +408,7 @@ double findWayLength(OSMID way_id) {
 }
 
 // Computes the bounding box of a given street based on its minimum and maximum latitude/longitude values.
+// Speed Requirement --> none
 LatLonBounds findStreetBoundingBox(StreetIdx street_id)
 {
     // Retrieve the minimum latitude/longitude for the street
@@ -415,13 +419,16 @@ LatLonBounds findStreetBoundingBox(StreetIdx street_id)
     return {minLatLon, maxLatLon};
 }
 
+// Returns the nearest point of interest of the given type (e.g. "restaurant")
+// to the given position.
+// Speed Requirement --> none
 POIIdx findClosestPOI(LatLon my_position, std::string poi_type)
 {
     double minimum = 100000;
     POIIdx POI_idx = -1;
     for (POIIdx count = 0; count < getNumPointsOfInterest(); count++)
-    {
-        if (getPOIType(count) == poi_type)
+    { // start comparing each possible POI from the current position
+        if (getPOIType(count) == poi_type) //storing the minimum into the returned index
         {
             LatLon POI_pos = getPOIPosition(count);
             double curr_distance = findDistanceBetweenTwoPoints(POI_pos, my_position);
@@ -435,16 +442,25 @@ POIIdx findClosestPOI(LatLon my_position, std::string poi_type)
     return POI_idx;
 }
 
+// Returns all intersections reachable by traveling down one street segment
+// from the given intersection. (hint: you can’t travel the wrong way on a 1-way
+// street)
+// The returned vector should NOT contain duplicate intersections.
+// Corner case: cul-de-sacs can connect an intersection to itself (from and to
+// intersection on street segment are the same). In that case include the
+// intersection in the returned vector (no special handling needed)
 std::vector<IntersectionIdx> findAdjacentIntersections(IntersectionIdx intersection_id)
 {
     return adjacent_street_segments[intersection_id];
 }
 
+// Returns the geographically nearest intersection (i.e. as the crow flies) to
+// the given position.
 IntersectionIdx findClosestIntersection(LatLon my_position)
 {
     double minimum = findDistanceBetweenTwoPoints(getIntersectionPosition(0), my_position);
     IntersectionIdx intersectID = -1;
-    for (IntersectionIdx i = 1; i < getNumIntersections(); i++)
+    for (IntersectionIdx i = 1; i < getNumIntersections(); i++) //comparing the minimum intersection from current position
     {
         LatLon intersectPos = getIntersectionPosition(i);
         double distance = findDistanceBetweenTwoPoints(intersectPos, my_position);
@@ -457,6 +473,7 @@ IntersectionIdx findClosestIntersection(LatLon my_position)
     return intersectID;
 }
 
+// Returns the street segments that connect to the given intersection.
 std::vector<StreetSegmentIdx> findStreetSegmentsOfIntersection(IntersectionIdx intersection_id)
 {
     return intersection_street_segments[intersection_id];
@@ -533,7 +550,9 @@ std::vector<StreetIdx> findStreetIdsFromPartialStreetName(std::string street_pre
     return removeDuplicateElement(streetsFound);
 }
 
-
+// Return the value associated with this key on the specified OSMNode.
+// If this OSMNode does not exist in the current map, or the specified key is
+// not set on the specified OSMNode, return an empty string.
 std::string getOSMNodeTagValue(OSMID osm_id, std::string key){
     if(OSMvec.find(osm_id) != OSMvec.end()){ //starting to find the  key value inside the OSMNode
         std::unordered_map<std::string, std::string>::iterator currTag = OSMvec.find(osm_id) -> second.find(key);  // the curret one tag  has the node tag information
