@@ -338,21 +338,25 @@ double findStreetLength(StreetIdx street_id) {
     return totalLength;
 }
 
+// Returns the area of the given closed feature in square meters.
+// Assume a non self-intersecting polygon (i.e. no holes).
+// Return 0 if this feature is not a closed polygon.
+// Speed Requirement --> moderate
 double findFeatureArea(FeatureIdx feature_id) {
     int numOfPoints = getNumFeaturePoints(feature_id);
     double area = 0.0;
-    
+
     //Check if the feature is closed
-    if (numOfPoints >= 3 && (getFeaturePoint(feature_id,0).latitude() == getFeaturePoint(feature_id, numOfPoints-1).latitude())
-            && (getFeaturePoint(feature_id,0).longitude() == getFeaturePoint(feature_id, numOfPoints-1).longitude())) {
-        
+    if (numOfPoints >= 3 && (getFeaturePoint(feature_id, 0).latitude() == getFeaturePoint(feature_id, numOfPoints - 1).latitude())
+            && (getFeaturePoint(feature_id, 0).longitude() == getFeaturePoint(feature_id, numOfPoints - 1).longitude())) {
+
         //Calculate the average latitude of the feature
         double avgLat = 0;
-        for (int i=0; i<numOfPoints-1; i++){
+        for (int i = 0; i < numOfPoints - 1; i++) {
             avgLat = avgLat + getFeaturePoint(feature_id, i).latitude();
         }
-        avgLat = avgLat/(numOfPoints - 1);
-        
+        avgLat = avgLat / (numOfPoints - 1);
+
         //Calculate the area of the feature using trapezoid formula
         double xi = 0.0;
         double x2 = 0.0;
@@ -363,7 +367,7 @@ double findFeatureArea(FeatureIdx feature_id) {
             yi = kEarthRadiusInMeters * getFeaturePoint(feature_id, i).latitude();
             x2 = kEarthRadiusInMeters * getFeaturePoint(feature_id, i + 1).longitude() * cos(kDegreeToRadian * avgLat);
             y2 = kEarthRadiusInMeters * getFeaturePoint(feature_id, i + 1).latitude();
-            area = area + 0.5 * (yi + y2)*(xi - x2)/3282.81;
+            area = area + 0.5 * (yi + y2)*(xi - x2) / 3282.81;
         }
     }
     return abs(area);
@@ -447,8 +451,6 @@ std::vector<StreetSegmentIdx> findStreetSegmentsOfIntersection(IntersectionIdx i
 // Returns all intersections along the given street.
 // There should be no duplicate intersections in the returned vector.
 // Speed Requirement --> high
-
-
 std::vector<IntersectionIdx> findIntersectionsOfStreet(StreetIdx street_id) {
     std::vector<IntersectionIdx> intersections;
     for (StreetSegmentIdx i = 0; i < streetSegmentVector[street_id].size(); i++) {
