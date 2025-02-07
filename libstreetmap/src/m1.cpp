@@ -89,7 +89,7 @@ bool loadMap(std::string map_streets_database_filename) {
     }
     //
     // Load your map related data structures here.
-    //
+    // load the street map and the osm map type
     std::string osm_mapfilename = map_streets_database_filename;
     osm_mapfilename.replace(osm_mapfilename.find(".street"), 8, ".osm");
     bool osmload_successful = loadOSMDatabaseBIN(osm_mapfilename);
@@ -112,19 +112,15 @@ bool loadMap(std::string map_streets_database_filename) {
             IntersectionIdx adjacent = 0;
             bool uniqueAdjSegment = false;
             //finding the adjacent point for forming a vector
-            if (ss_info.from == intersection_id)
-            {
+            if (ss_info.from == intersection_id){ //head intersection
                 adjacent = ss_info.to;
             }
-            else if (ss_info.to == intersection_id && !(ss_info.oneWay))
-            {
+            else if (ss_info.to == intersection_id && !(ss_info.oneWay)){  //end intersetion with one way direction
                 adjacent = ss_info.from;
             }
-            else if (ss_info.to == intersection_id && ss_info.from == intersection_id)
-            { //corner case for cul-de-sacs
+            else if (ss_info.to == intersection_id && ss_info.from == intersection_id){ //corner case for cul-de-sacs
                 adjacent = ss_info.to;
             }
-
             //no duplicate happens
             if(std::find(adjacent_street_segments[intersection_id].begin(), adjacent_street_segments[intersection_id].end(), adjacent) == adjacent_street_segments[intersection_id].end()){
                 uniqueAdjSegment = true;
@@ -141,10 +137,8 @@ bool loadMap(std::string map_streets_database_filename) {
         const OSMNode* node = getNodeByIndex(i);
         OSMID nodeId = node ->  id();
         std::unordered_map<std::string, std::string> storeTag;
-        int nodeTag= getTagCount(node);
-
-        for(int j = 0; j < nodeTag; j++){
-            std::pair<std::string, std::string> tagPair =  getTagPair(node, j);
+        for(int j = 0; j < getTagCount(node); j++){
+            std::pair<std::string, std::string> tagPair =  getTagPair(node, j); //check the pair for each node gone through
             storeTag[tagPair.first] = tagPair.second; //give the corresponding index with the correct value
         }
         OSMvec[nodeId] = storeTag;
@@ -249,14 +243,14 @@ double findStreetSegmentTurnAngle(StreetSegmentIdx src_street_segment_id, Street
     StreetSegmentInfo dst_info = getStreetSegmentInfo(dst_street_id);
     IntersectionIdx intersection = -1;
     // checking intersection category
-    if (src_info.to == dst_info.from  || src_info.to ==  dst_info.to){ //head intersection
+    if (src_info.to == dst_info.from  || src_info.to ==  dst_info.to){ //head intersection from src
         intersection =  src_info.to;
     }
-    else if (src_info.from == dst_info.to || src_info.from == dst_info.from) //end intersection
+    else if (src_info.from == dst_info.to || src_info.from == dst_info.from) //end intersection from src
     {
         intersection = src_info.from;
     }
-    else
+    else //no intersection
     {
         return NO_ANGLE;
     }
@@ -401,8 +395,8 @@ POIIdx findClosestPOI(LatLon my_position, std::string poi_type)
     double minimum = 100000;
     POIIdx POI_idx = -1;
     for (POIIdx count = 0; count < getNumPointsOfInterest(); count++)
-    {
-        if (getPOIType(count) == poi_type)
+    { // start comparing each possible POI from the current position
+        if (getPOIType(count) == poi_type) //storing the minimum into the returned index
         {
             LatLon POI_pos = getPOIPosition(count);
             double curr_distance = findDistanceBetweenTwoPoints(POI_pos, my_position);
@@ -425,7 +419,7 @@ IntersectionIdx findClosestIntersection(LatLon my_position)
 {
     double minimum = findDistanceBetweenTwoPoints(getIntersectionPosition(0), my_position);
     IntersectionIdx intersectID = -1;
-    for (IntersectionIdx i = 1; i < getNumIntersections(); i++)
+    for (IntersectionIdx i = 1; i < getNumIntersections(); i++) //comparing the minimum intersection from current position
     {
         LatLon intersectPos = getIntersectionPosition(i);
         double distance = findDistanceBetweenTwoPoints(intersectPos, my_position);
