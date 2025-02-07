@@ -66,10 +66,9 @@ std::unordered_map<OSMID, int> osmidToNodeMap;
 std::unordered_map<OSMID, int> osmidToWayMap;
 std::vector<std::vector<int>> convertedWayIndex;  // Stores node indices 
 
-LatLon getClosestSegment(StreetSegmentIdx segmentID, IntersectionIdx intersection);
-void preprocessMappings();
-int getNodeIndexFromOSMID(OSMID node_id);
-int getWayIndexFromOSMID(OSMID way_id);
+void preprocessMappings();//helper function, modificate the database 
+int getNodeIndexFromOSMID(OSMID node_id);//get the correponding index from the node OSMID
+int getWayIndexFromOSMID(OSMID way_id);//get the correponding index from the node OSMID
 
 //global variables for function usage
 std::vector<std::vector<StreetSegmentIdx>> intersection_street_segments;
