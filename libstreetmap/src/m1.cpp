@@ -237,8 +237,9 @@ double findStreetSegmentLength(StreetSegmentIdx street_segment_id)
 //(time = distance / speed_limit)
 //Speed Requirement --> High
 double findStreetSegmentTravelTime(StreetSegmentIdx street_segment_id)
-{
-    double segmentLength = segmentData[street_segment_id].first;
+{   
+    //Get the segment length and the segment traveltime from the modificated vector
+    double segmentLength = segmentData[street_segment_id].first; 
     double speedLimit = segmentData[street_segment_id].second;
     return (speedLimit > 0) ? (segmentLength / speedLimit) : 0.0;
 }
@@ -326,13 +327,17 @@ double findStreetSegmentTurnAngle(StreetSegmentIdx src_street_segment_id, Street
     return M_PI - turnAngle;
 }
 
+// Computes the total length of a given street by summing the lengths of its segments.
+// Returns 0.0 if the street_id is invalid.
 double findStreetLength(StreetIdx street_id) {
     double totalLength = 0.0;
 
+    // Validate street_id before proceeding
     if (street_id < 0 || street_id >= (streetSegmentVector.size())){
         return 0.0;
     }
 
+    // Retrieve the vector of street segments associated with the given street ID
     const std::vector<StreetSegmentIdx>& segmentsOfStreetId = streetSegmentVector[street_id];
 
     for (int i = 0; i < segmentsOfStreetId.size(); i++) {
@@ -342,7 +347,7 @@ double findStreetLength(StreetIdx street_id) {
         if (segmentId < 0 || segmentId >= (segmentData.size())) {
             continue;
         }
-
+        //Add up all the street segment length 
         totalLength += segmentData[segmentId].first;
     }
 
@@ -380,17 +385,23 @@ double findFeatureArea(FeatureIdx feature_id) {
     return abs(area);
 }
 
-
+// Computes the total length of a way by summing the distances between consecutive nodes.
+// Returns 0.0 if the way_id is invalid or if there are fewer than two nodes.
 double findWayLength(OSMID way_id) {
+
+    // Convert OSM way ID to its internal index
     int wayIndex = getWayIndexFromOSMID(way_id);
     if (wayIndex == -1) return 0.0;  
-
+    
+    // Retrieve the sequence of node indices forming this way
     const std::vector<int>& nodeIndices = convertedWayIndex[wayIndex];
     
-    if (nodeIndices.size() < 2) return 0.0;  // Not enough nodes
+    // Ensure there are at least two nodes to form a valid path
+    if (nodeIndices.size() < 2) return 0.0;  
 
     double totalLength = 0.0;
 
+    // Sum up distances between consecutive nodes
     for (int i = 1; i < nodeIndices.size(); i++) {
         totalLength += findDistanceBetweenTwoPoints(
             getNodeCoords(getNodeByIndex(nodeIndices[i - 1])),
@@ -400,9 +411,13 @@ double findWayLength(OSMID way_id) {
 
     return totalLength;
 }
+
+// Computes the bounding box of a given street based on its minimum and maximum latitude/longitude values.
 LatLonBounds findStreetBoundingBox(StreetIdx street_id)
 {
+    // Retrieve the minimum latitude/longitude for the street
     LatLon minLatLon(streetLat[street_id].first, streetLon[street_id].first);
+    // Retrieve the maximum latitude/longitude for the street
     LatLon maxLatLon(streetLat[street_id].second, streetLon[street_id].second);
 
     return {minLatLon, maxLatLon};
@@ -556,7 +571,8 @@ std::string getOSMNodeTagValue(OSMID osm_id, std::string key){
     }
 }
 
-
+// Preprocesses all street segments by storing relevant information for quick access.
+// This includes segment lengths, intersections, latitude/longitude bounds, and curve points.
 void preprocessStreetSegments(){
 
     int numStreets = getNumStreets();
@@ -567,40 +583,44 @@ void preprocessStreetSegments(){
 
     segmentLatLon.resize(numSegments);
 
+    // Initialize street bounding box values to extreme placeholders
     streetLat.resize(numStreets, {10000000, -10000000});
     streetLon.resize(numStreets, {10000000, -10000000});
 
     // Loop through all street segments and store coresponding info in the corresponding vectors
     for (int segmentId = 0; segmentId < getNumStreetSegments(); segmentId++){
         StreetSegmentInfo segmentInfo = getStreetSegmentInfo(segmentId);
+
+        // Associate segment with its street
         streetSegmentVector[segmentInfo.streetID].push_back(segmentId);
+
+        // Store intersections for this street
         intersectionVector[segmentInfo.streetID].push_back(segmentInfo.from);
         intersectionVector[segmentInfo.streetID].push_back(segmentInfo.to);
-////////////////////        
+
+        // Compute and store segment length and speed limit
         double segmentLength = findStreetSegmentLength(segmentId);
         segmentData[segmentId] = {segmentLength, segmentInfo.speedLimit};
-        ///////////////////
+
+        // Store segment start and end positions
         LatLon fromPos = getIntersectionPosition(segmentInfo.from);
         LatLon toPos = getIntersectionPosition(segmentInfo.to);
         segmentLatLon[segmentId] = {fromPos, toPos};
-        ////////////////////
-        int streetId = segmentInfo.streetID;
 
+        // Update street bounding box (latitude/longitude range)
+        int streetId = segmentInfo.streetID;
         streetLat[streetId].first = std::min({streetLat[streetId].first, fromPos.latitude(), toPos.latitude()});
         streetLat[streetId].second = std::max({streetLat[streetId].second, fromPos.latitude(), toPos.latitude()});
-
         streetLon[streetId].first = std::min({streetLon[streetId].first, fromPos.longitude(), toPos.longitude()});
         streetLon[streetId].second = std::max({streetLon[streetId].second, fromPos.longitude(), toPos.longitude()});
 
-        // Include curve points in min/max lat/lon calculations
-        for (int i = 0; i < segmentInfo.numCurvePoints; i++)
-        {
+        // Include curve points in bounding box calculations
+        for (int i = 0; i < segmentInfo.numCurvePoints; i++) {
             LatLon curvePoint = getStreetSegmentCurvePoint(segmentId, i);
-
-            // Update
+            
+            // Update bounding box with curve point data
             streetLat[streetId].first = std::min(streetLat[streetId].first, curvePoint.latitude());
             streetLat[streetId].second = std::max(streetLat[streetId].second, curvePoint.latitude());
-
             streetLon[streetId].first = std::min(streetLon[streetId].first, curvePoint.longitude());
             streetLon[streetId].second = std::max(streetLon[streetId].second, curvePoint.longitude());
         }
@@ -620,18 +640,23 @@ void preprocessStreets() {
     }
 }
 
+// Retrieves the node index corresponding to a given OSMID.
+// Returns -1 if the node ID is not found.
 int getNodeIndexFromOSMID(OSMID node_id) {
     auto it = osmidToNodeMap.find(node_id);
-    if (it == osmidToNodeMap.end()) return -1;
+    if (it == osmidToNodeMap.end()) return -1; // Node ID not found
     return it->second;
 }
 
+// Retrieves the way index corresponding to a given OSMID.
+// Returns -1 if the way ID is not found.
 int getWayIndexFromOSMID(OSMID way_id) {
     auto it = osmidToWayMap.find(way_id);
-    if (it == osmidToWayMap.end()) return -1;
+    if (it == osmidToWayMap.end()) return -1; // Way ID not found
     return it->second;
 }
 
+// Preprocesses OSM node and way mappings for fast lookups and converts way node sequences to indices.
 void preprocessMappings() {
     int numNodes = getNumberOfNodes();
     int numWays = getNumberOfWays();
@@ -640,28 +665,31 @@ void preprocessMappings() {
     osmidToWayMap.reserve(numWays);
     convertedWayIndex.resize(numWays);
 
+    // Store mapping of OSM node IDs to internal indices
     for (int i = 0; i < numNodes; i++) {
         OSMID nodeID = getNodeByIndex(i)->id();
         osmidToNodeMap[nodeID] = i;
     }
 
-    // Store Way OSMID to Index AND Convert Way Nodes 
+    // Store Way OSMID to Index AND Convert Way Nodes
     for (int i = 0; i < numWays; i++) {
         OSMID wayID = getWayByIndex(i)->id();
         osmidToWayMap[wayID] = i;
 
         std::vector<int> nodeIndices;
         const std::vector<OSMID>& wayNodes = getWayMembers(getWayByIndex(i));
-        nodeIndices.reserve(wayNodes.size());  
+        nodeIndices.reserve(wayNodes.size());
 
-        for (int j = 0; j < wayNodes.size(); j++) {  
-            auto it = osmidToNodeMap.find(wayNodes[j]);
-            if (it != osmidToNodeMap.end()) {  
+        // Convert OSMIDs to node indices
+        for (OSMID node : wayNodes) {
+            auto it = osmidToNodeMap.find(node);
+            if (it != osmidToNodeMap.end()) {
                 nodeIndices.push_back(it->second);
             }
         }
 
-        convertedWayIndex[i] = std::move(nodeIndices);  
+        // Store processed way-node sequence
+        convertedWayIndex[i] = std::move(nodeIndices);
     }
 }
 
