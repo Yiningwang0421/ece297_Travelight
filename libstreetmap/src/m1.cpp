@@ -304,7 +304,7 @@ double findStreetSegmentTurnAngle(StreetSegmentIdx src_street_segment_id, Street
     double a = findDistanceBetweenTwoPoints(intersectionPos, srcPT);
     double b = findDistanceBetweenTwoPoints(intersectionPos, dstPT);
     double c = findDistanceBetweenTwoPoints(srcPT, dstPT);
-    double cos_theta = (a*a + b*b  - c*c) / (2*a*b);;
+    double cos_theta = (a*a + b*b  - c*c) / (2*a*b);
     // constrain the  range of cosine into [-1, 1] with correcting tiny out of range
     if(cos_theta > 1){
         cos_theta = 1;
