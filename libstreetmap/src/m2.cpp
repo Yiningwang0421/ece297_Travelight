@@ -18,7 +18,7 @@
  * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
  * SOFTWARE.
  */
-#include "m1.h"
+
 #include "m2.h"
 
 void drawMap() {
@@ -28,15 +28,4 @@ void drawMap() {
    // and your main() function in main/src/main.cpp.
    // The unit tests always call loadMap() before calling this function
    // and call closeMap() after this function returns.
-}
-
-int main(int argc, char** argv){
-   bool load_success = loadMap(map_path);
-   if(!load_success){
-      std::cerr << "Failed to load map '" << map_path << '\n';
-      return 2;
-   }
-   drawMap();
-   closeMap();
-   return 0;
 }
