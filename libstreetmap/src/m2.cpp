@@ -20,7 +20,14 @@
  */
 #include "m1.h"
 #include "m2.h"
+#include "ezgl/application.hpp"
+#include "ezgl/graphics.hpp"
 
+
+void drawMainCanvas(ezgl::renderer *g){
+   g -> set_color(ezgl::WHITE);
+   g -> fill_rectangle(g -> get_visible_world());
+}
 void drawMap() {
    // Set up the ezgl graphics window and hand control to it, as shown in the 
    // ezgl example program. 
@@ -28,15 +35,13 @@ void drawMap() {
    // and your main() function in main/src/main.cpp.
    // The unit tests always call loadMap() before calling this function
    // and call closeMap() after this function returns.
+   ezgl::application::settings settings;
+   settings.main_ui_resource = "libstreetmap/resources/main.ui";
+   settings.window_identifier = "MainWindow";
+   settings.canvas_identifier = "MainCanvas";
+   ezgl::application app(settings);
+   ezgl::rectangle initial_world({-1000, -1000}, {1000, 1000});
+   app.add_canvas("MainCanvas", drawMainCanvas, initial_world);
+   app.run(nullptr, nullptr, nullptr, nullptr);
 }
 
-int main(int argc, char** argv){
-   bool load_success = loadMap(map_path);
-   if(!load_success){
-      std::cerr << "Failed to load map '" << map_path << '\n';
-      return 2;
-   }
-   drawMap();
-   closeMap();
-   return 0;
-}

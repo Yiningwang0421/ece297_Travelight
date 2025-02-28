@@ -23,6 +23,7 @@
 #include <string>
 
 #include "m1.h"
+#include "m2.h"
 
 using namespace std;
 
@@ -66,7 +67,7 @@ int main(int argc, char** argv) {
     std::cout << "Successfully loaded map '" << map_path << "'\n";
 
     //You can now do something with the map data
-
+    drawMap();
 
     
     
