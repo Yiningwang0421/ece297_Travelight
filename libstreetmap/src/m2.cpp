@@ -19,15 +19,43 @@
  * SOFTWARE.
  */
 
+#include "m1.h"
 #include "m2.h"
 #include "ezgl/application.hpp"
 #include "ezgl/graphics.hpp"
+#include "StreetsDatabaseAPI.h"
+#include <vector>
+#include <iostream>
+#include <sstream>
+#include <cmath>
 
+//global variables
+double avgLat = 0;
+
+double x_from_lon(double lon){
+   return lon * kDegreeToRadian * kEarthRadiusInMeters * std::cos(avgLat * kDegreeToRadian);
+
+}
+
+double y_from_lon(double lat){
+   return lat * kDegreeToRadian * kEarthRadiusInMeters * std::cos(avgLat * kDegreeToRadian);
+}
 
 void drawMainCanvas(ezgl::renderer *g){
    g -> set_color(ezgl::WHITE);
    g -> fill_rectangle(g -> get_visible_world());
+   g -> set_color(ezgl::BLACK);
+   for(int i = 0; i < getNumStreetSegments(); i++){
+      StreetSegmentInfo segment = getStreetSegmentInfo(i);
+      ezgl::point2d from = {x_from_lon(getIntersectionPosition(segment.from).longitude()),
+      y_from_lon(getIntersectionPosition(segment.from).latitude())};
+      ezgl::point2d to = {x_from_lon(getIntersectionPosition(segment.to).longitude()),
+      y_from_lon(getIntersectionPosition(segment.to).latitude())};
+
+
+   }
 }
+
 void drawMap() {
    // Set up the ezgl graphics window and hand control to it, as shown in the 
    // ezgl example program. 
@@ -40,11 +68,8 @@ void drawMap() {
    settings.window_identifier = "MainWindow";
    settings.canvas_identifier = "MainCanvas";
    ezgl::application app(settings);
-   ezgl::rectangle initial_world({-1000, -1000}, {1000, 1000});
+   ezgl::rectangle initial_world({0, 0}, {1000, 1000});
    app.add_canvas("MainCanvas", drawMainCanvas, initial_world);
    app.run(nullptr, nullptr, nullptr, nullptr);
 }
-<<<<<<< HEAD
 
-=======
->>>>>>> da6058c85ee1a708e1c395c355cd5cc863d76931
