@@ -76,10 +76,6 @@ std::vector<std::vector<IntersectionIdx>> adjacent_street_segments;
 
 std::unordered_map<OSMID, std::unordered_map<std::string, std::string>> OSMvec;
 bool loadMap(std::string map_streets_database_filename) {
-
-
-
-
     bool load_successful = loadStreetsDatabaseBIN(map_streets_database_filename); //Indicates whether the map has loaded
                                                                                   //successfully
     std::cout << "loadMap: " << map_streets_database_filename << std::endl;
@@ -147,12 +143,9 @@ bool loadMap(std::string map_streets_database_filename) {
 
     load_successful = true; //Make sure this is updated to reflect whether
                             //loading the map succeeded or failed
-    
-
     preprocessStreetSegments();
     preprocessMappings();
     preprocessStreets();
-
     return load_successful;
 }
 

@@ -18,7 +18,7 @@
  * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
  * SOFTWARE.
  */
-#include "m1.h"
+
 #include "m2.h"
 #include "ezgl/application.hpp"
 #include "ezgl/graphics.hpp"
@@ -44,4 +44,7 @@ void drawMap() {
    app.add_canvas("MainCanvas", drawMainCanvas, initial_world);
    app.run(nullptr, nullptr, nullptr, nullptr);
 }
+<<<<<<< HEAD
 
+=======
+>>>>>>> da6058c85ee1a708e1c395c355cd5cc863d76931
