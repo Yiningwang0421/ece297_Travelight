@@ -51,8 +51,18 @@ void drawMainCanvas(ezgl::renderer *g){
       y_from_lon(getIntersectionPosition(segment.from).latitude())};
       ezgl::point2d to = {x_from_lon(getIntersectionPosition(segment.to).longitude()),
       y_from_lon(getIntersectionPosition(segment.to).latitude())};
-
-
+      g -> draw_line(from, to);
+      int curveP = segment.numCurvePoints;
+      if(curveP > 0){
+         ezgl::point2d prev = from;
+         for(int j = 0; j < curveP; j++){
+            LatLon curve_pt = getStreetSegmentCurvePoint(i, j);
+            ezgl::point2d next = {x_from_lon(curve_pt.longitude()), y_from_lon(curve_pt.latitude())};
+            g -> draw_line(prev, next);
+            prev = next;
+         }
+         g -> draw_line(prev, to);
+      }
    }
 }
 
