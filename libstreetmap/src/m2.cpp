@@ -108,24 +108,19 @@ void load_road_data() {
         LatLon start = getIntersectionPosition(seg.from);
         LatLon end = getIntersectionPosition(seg.to);
 
-        // **Step 1: Convert the start point**
         ezgl::point2d prev_point(x_from_lon(start.longitude()), y_from_lat(start.latitude()));
 
-        // **Step 2: Process all curve points**
         for (int j = 0; j < seg.numCurvePoints; j++) {
             LatLon curve = getStreetSegmentCurvePoint(i, j);
             ezgl::point2d curve_point(x_from_lon(curve.longitude()), y_from_lat(curve.latitude()));
 
-            // Store each segment connecting consecutive points
             roads.emplace_back(prev_point, curve_point);
             prev_point = curve_point; // Update previous point
         }
 
-        // **Step 3: Add the final segment connecting to the end point**
         ezgl::point2d end_point(x_from_lon(end.longitude()), y_from_lat(end.latitude()));
         roads.emplace_back(prev_point, end_point);
 
-        // **Step 4: Store the road type for classification**
         road_types.push_back(classify_road(seg.wayOSMID));
     }
 }
@@ -144,13 +139,13 @@ void draw_main_canvas(ezgl::renderer *g) {
     for (size_t i = 0; i < roads.size(); i++) {
         if (road_types[i] == 3) {
             g->set_color(255, 140, 0);  // Orange for Highways
-            g->set_line_width(4);
+            g->set_line_width(3);
         } else if (road_types[i] == 2) {
             g->set_color(150, 150, 150);  // Gray for Main Roads
-            g->set_line_width(2);
+            g->set_line_width(3);
         } else {
             g->set_color(ezgl::WHITE);  // White for Secondary Roads
-            g->set_line_width(1);
+            g->set_line_width(2);
         }
 
         g->draw_line(roads[i].first, roads[i].second);
