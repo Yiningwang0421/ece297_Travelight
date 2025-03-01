@@ -29,9 +29,20 @@
 #include <vector>
 #include <iostream>
 #include <unordered_map>
+#include <unordered_set>
 
 
 void drawFeatures(ezgl::renderer *g);
+double x_from_lon(double lon);
+double y_from_lat(double lat);
+void loadHighway();
+int  classify_road(OSMID way_id);
+void calculate_map_bound(double &min_lat, double &max_lat, double &min_lon, double &max_lon);
+void drawStreetSegments(ezgl::renderer *g, int priority, double zoomLevel);
+void drawStreetName(ezgl::renderer *g, ezgl::point2d start, ezgl::point2d end, std::string name);
+void load_road_data();
+void draw_main_canvas(ezgl::renderer *g);
+void setInterface(ezgl::application &application);
 
 
 
@@ -102,6 +113,61 @@ void calculate_map_bound(double &min_lat, double &max_lat, double &min_lon, doub
     avgLat = (max_lat + min_lat) / 2.0;
 }
 
+//output the road based on the classified osm type
+void drawStreetSegments(ezgl::renderer *g, int priority, double zoomLevel){
+   std::unordered_set<std::string> drawnNames;
+   for(size_t i = 0; i < roads.size(); i++){
+      int roadType = road_types[i];
+      if(priority == 3 && roadType < 3){
+         continue;
+      }
+      if(priority == 2 && roadType < 2){
+         continue;
+      }
+      if(roadType == 3){
+         g -> set_color(255, 140, 0);
+         g -> set_line_width(5);
+      }
+      else if(roadType == 2){
+         g -> set_color(150, 150, 150);
+         g -> set_line_width(4);
+      }
+      else{
+         g -> set_color(ezgl::WHITE);
+         g -> set_line_width(3);
+      }
+      g -> draw_line(roads[i].first, roads[i].second);
+      
+      // show road name only when zoomed in maximum view
+      if(priority == 1 && zoomLevel < 8000){
+         if(i >= getNumStreetSegments()){continue;}
+         StreetSegmentInfo segInfo = getStreetSegmentInfo(i);
+         if(segInfo.streetID < 0 || segInfo.streetID >= getNumStreets()){ continue; }
+         std::string streetName = getStreetName(segInfo.streetID);
+         if(!streetName.empty() && drawnNames.find(streetName) == drawnNames.end()){
+            drawStreetName(g, roads[i].first, roads[i].second, streetName);
+            drawnNames.insert(streetName);
+         }
+      }
+   }
+}
+
+void drawStreetName(ezgl::renderer *g, ezgl::point2d start, ezgl::point2d end, std::string name){
+   if(name.empty()){ //no names case
+      return;
+   }
+   ezgl::point2d midPoint((start.x + end.x) / 2, (start.y + end.y) / 2);
+   double dx = end.x - start.x;
+   double dy = end.y - start.y;
+   double length = sqrt(dx * dx + dy * dy);
+   dx = dx / length;
+   dy = dy / length;
+   ezgl::point2d textPos(midPoint.x + dx * 10, midPoint.y + dy * 10);
+   g -> set_font_size(10);
+   g -> set_color(ezgl::BLACK);
+   g -> draw_text(textPos, name);
+}
+
 // Load Roads and Convert to ezgl::point2d
 void load_road_data() {
     roads.clear();
@@ -114,12 +180,12 @@ void load_road_data() {
         LatLon end = getIntersectionPosition(seg.to);
 
         ezgl::point2d prev_point(x_from_lon(start.longitude()), y_from_lat(start.latitude()));
-
         for (int j = 0; j < seg.numCurvePoints; j++) {
             LatLon curve = getStreetSegmentCurvePoint(i, j);
             ezgl::point2d curve_point(x_from_lon(curve.longitude()), y_from_lat(curve.latitude()));
             roads.emplace_back(prev_point, curve_point);
             road_types.push_back(classify_road(seg.wayOSMID));
+            oneWayRoad.push_back(seg.oneWay);
             prev_point = curve_point; // Update previous point
         }
 
@@ -135,28 +201,21 @@ void draw_main_canvas(ezgl::renderer *g)
 {
    g->set_color(220, 220, 220);
    g->fill_rectangle(g->get_visible_world());
-
-   for (size_t i = 0; i < roads.size(); i++)
-   {
-      if (road_types[i] == 3)
-      {
-         g->set_color(255, 140, 0); // Orange for Highways
-         g->set_line_width(6);
-      }
-      else if (road_types[i] == 2)
-      {
-         g->set_color(150, 150, 150); // Gray for Main Roads
-         g->set_line_width(3);
-      }
-      else
-      {
-         g->set_color(ezgl::WHITE); // White for Secondary Roads
-         g->set_line_width(2);
-      }
-
-      g->draw_line(roads[i].first, roads[i].second);
-   }
+   double zoomLevel = g -> get_visible_world().width();
+   
+   //draw features
    drawFeatures(g);
+
+   if(zoomLevel <= 10000){
+      drawStreetSegments(g, 1, zoomLevel);
+   }
+   else if(zoomLevel <= 70000){
+      drawStreetSegments(g, 2, zoomLevel);
+   }
+   else{
+      drawStreetSegments(g, 3, zoomLevel);
+   }
+   
    //indiate the one way street
 }
 
