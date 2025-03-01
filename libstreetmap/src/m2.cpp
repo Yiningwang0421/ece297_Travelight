@@ -41,6 +41,7 @@ int classify_road(OSMID way_id);
 void calculate_map_bound(double &min_lat, double &max_lat, double &min_lon, double &max_lon);
 void drawStreetSegments(ezgl::renderer *g, int priority);
 void drawStreetNames(ezgl::renderer *g, double zoomLevel);
+double getZoomLevel(ezgl::renderer *g, double initial_width);
 void load_road_data();
 void draw_main_canvas(ezgl::renderer *g);
 void setInterface(ezgl::application &application);
@@ -118,33 +119,33 @@ void calculate_map_bound(double &min_lat, double &max_lat, double &min_lon, doub
 }
 
 //output the road based on the classified osm type
-void drawStreetSegments(ezgl::renderer *g, int priority){
-   for(size_t i = 0; i < roads.size(); i++){
-      int roadType = road_types[i];
-      if(priority == 3 && roadType < 3){
-         continue;
-      }
-      if(priority == 2 && roadType < 2){
-         continue;
-      }
+// void drawStreetSegments(ezgl::renderer *g, int priority){
+//    for(size_t i = 0; i < roads.size(); i++){
+//       int roadType = road_types[i];
+//       if(priority == 3 && roadType < 3){
+//          continue;
+//       }
+//       if(priority == 2 && roadType < 2){
+//          continue;
+//       }
 
-      if(roadType == 3){
-         g->set_color(255, 140, 0);
-         g->set_line_width(5);
-      }
-      else if(roadType == 2){
-         g->set_color(156, 150, 150);
-         g->set_line_width(4);
-      }
-      else{
-         g->set_color(ezgl::WHITE);
-         g->set_line_width(3);
-      }
-      for(size_t j = 0; j < roads[i].size() - 1; j++){
-         g->draw_line(roads[i][j], roads[i][j+1]);
-      }
-   }
-}
+//       if(roadType == 3){
+//          g->set_color(255, 140, 0);
+//          g->set_line_width(5);
+//       }
+//       else if(roadType == 2){
+//          g->set_color(156, 150, 150);
+//          g->set_line_width(4);
+//       }
+//       else{
+//          g->set_color(ezgl::WHITE);
+//          g->set_line_width(3);
+//       }
+//       for(size_t j = 0; j < roads[i].size() - 1; j++){
+//          g->draw_line(roads[i][j], roads[i][j+1]);
+//       }
+//    }
+// }
 
 void drawStreetNames(ezgl::renderer *g, double zoomLevel)
 {
@@ -238,7 +239,9 @@ void draw_main_canvas(ezgl::renderer *g)
    g->set_color(220, 220, 220);
    g->fill_rectangle(g->get_visible_world());
    
-   double zoomLevel = g -> get_visible_screen().width();
+   static double initial_width = g->get_visible_world().width();
+   double zoomLevel = getZoomLevel(g, initial_width);
+
     drawFeatures(g, zoomLevel);
     drawRoads(g, zoomLevel);    
  
@@ -352,7 +355,6 @@ void drawRoads(ezgl::renderer *g, double zoomLevel) {
         }
     }
 }
-
 
 double getZoomLevel(ezgl::renderer *g, double initial_width) {
     double current_width = g->get_visible_world().width();
