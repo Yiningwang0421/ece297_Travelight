@@ -30,6 +30,11 @@
 #include <iostream>
 #include <unordered_map>
 
+
+void drawFeatures(ezgl::renderer *g);
+
+
+
 std::vector<std::pair<ezgl::point2d, ezgl::point2d>> roads;
 std::vector<int> road_types;
 std::vector<bool> oneWayRoad;
@@ -105,11 +110,19 @@ void load_road_data() {
         LatLon start = getIntersectionPosition(seg.from);
         LatLon end = getIntersectionPosition(seg.to);
 
-        // Convert LatLon to X/Y
-        ezgl::point2d start_point(x_from_lon(start.longitude()), y_from_lat(start.latitude()));
-        ezgl::point2d end_point(x_from_lon(end.longitude()), y_from_lat(end.latitude()));
+        ezgl::point2d prev_point(x_from_lon(start.longitude()), y_from_lat(start.latitude()));
 
-        roads.emplace_back(start_point, end_point);
+        for (int j = 0; j < seg.numCurvePoints; j++) {
+            LatLon curve = getStreetSegmentCurvePoint(i, j);
+            ezgl::point2d curve_point(x_from_lon(curve.longitude()), y_from_lat(curve.latitude()));
+
+            roads.emplace_back(prev_point, curve_point);
+            prev_point = curve_point; // Update previous point
+        }
+
+        ezgl::point2d end_point(x_from_lon(end.longitude()), y_from_lat(end.latitude()));
+        roads.emplace_back(prev_point, end_point);
+
         road_types.push_back(classify_road(seg.wayOSMID));
         oneWayRoad.push_back(seg.oneWay);
     }
@@ -117,16 +130,22 @@ void load_road_data() {
 
 // Draw Roads Based on Classification
 void draw_main_canvas(ezgl::renderer *g) {
-    g->set_color(200, 200, 200);
+    g->set_color(220, 220, 220);
     g->fill_rectangle(g->get_visible_world());
+
+
+    drawFeatures(g);
+
+
+
 
     for (size_t i = 0; i < roads.size(); i++) {
         if (road_types[i] == 3) {
             g->set_color(255, 140, 0);  // Orange for Highways
-            g->set_line_width(6);
+            g->set_line_width(3);
         } else if (road_types[i] == 2) {
             g->set_color(150, 150, 150);  // Gray for Main Roads
-            g->set_line_width(4);
+            g->set_line_width(3);
         } else {
             g->set_color(ezgl::WHITE);  // White for Secondary Roads
             g->set_line_width(2);
@@ -155,6 +174,7 @@ void draw_main_canvas(ezgl::renderer *g) {
            }
         }
     }
+    
 }
 
 // Set Initial View Using LatLon Bounds
@@ -182,4 +202,45 @@ void drawMap() {
     loadHighway();
     load_road_data();
     application.run(nullptr, nullptr, nullptr, nullptr);
+}
+
+void drawFeatures(ezgl::renderer *g) {
+    for (FeatureIdx i = 0; i < getNumFeatures(); i++) {
+        FeatureType type = getFeatureType(i);
+        int numPoints = getNumFeaturePoints(i);
+
+        if (numPoints < 2) continue;
+
+        std::vector<ezgl::point2d> points;
+        for (int j = 0; j < numPoints; j++) {
+            LatLon latlon = getFeaturePoint(i, j);
+            points.push_back(ezgl::point2d(x_from_lon(latlon.longitude()), y_from_lat(latlon.latitude())));
+        }
+
+        if (type == PARK || type == GREENSPACE) {
+            g->set_color(181, 220, 159); 
+        } else if (type == LAKE) {
+            g->set_color(173, 216, 230); 
+        } else if (type == BEACH) {
+            g->set_color(238, 214, 175); 
+        } else if (type == ISLAND) {
+            g->set_color(205, 183, 158); 
+        } else if (type == GOLFCOURSE) {
+            g->set_color(119, 221, 119); 
+        } else if (type == BUILDING) {
+            g->set_color(169, 169, 169); 
+        } else {
+            g->set_color(0, 0, 0); 
+        }
+
+        if (type != RIVER && type != STREAM) {
+            g->fill_poly(points);
+        } else {
+            g->set_color(173, 216, 230);
+            g->set_line_width(2);
+            for (size_t j = 0; j < points.size() - 1; j++) {
+                g->draw_line(points[j], points[j + 1]);
+            }
+        }
+    }
 }
