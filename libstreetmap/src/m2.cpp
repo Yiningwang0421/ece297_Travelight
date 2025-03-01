@@ -32,6 +32,7 @@
 
 std::vector<std::pair<ezgl::point2d, ezgl::point2d>> roads;
 std::vector<int> road_types;
+std::vector<bool> oneWayRoad;
 std::unordered_map<OSMID, std::string> osmHighway;
 
 double avgLat;
@@ -97,6 +98,7 @@ void calculate_map_bound(double &min_lat, double &max_lat, double &min_lon, doub
 void load_road_data() {
     roads.clear();
     road_types.clear();
+    oneWayRoad.clear();
 
     for (int i = 0; i < getNumStreetSegments(); i++) {
         StreetSegmentInfo seg = getStreetSegmentInfo(i);
@@ -109,6 +111,7 @@ void load_road_data() {
 
         roads.emplace_back(start_point, end_point);
         road_types.push_back(classify_road(seg.wayOSMID));
+        oneWayRoad.push_back(seg.oneWay);
     }
 }
 
@@ -130,6 +133,27 @@ void draw_main_canvas(ezgl::renderer *g) {
         }
 
         g->draw_line(roads[i].first, roads[i].second);
+        
+        //indiate the one way street
+        if(i < oneWayRoad.size() && oneWayRoad[i]){
+           double dx = roads[i].second.x - roads[i].first.x;
+           double dy = roads[i].second.y - roads[i].first.y;
+           double length = sqrt(dx * dx + dy * dy);
+           if(length > 5){
+              ezgl::point2d midPoint = {(roads[i].first.x + roads[i].second.x) / 2, roads[i].first.y + roads[i].second.y / 2};
+              double scale = length * 0.25;
+              ezgl::point2d arrowTip = {midPoint.x + (dx / length) * scale, midPoint.y + (dy / length) * scale};
+              double arrowSize = scale * 0.6;
+              ezgl::point2d arrowLeft = {arrowTip.x - (dy / length) * arrowSize, arrowTip.y + (dx / length) * arrowSize};
+              ezgl::point2d arrowRight = {arrowTip.x + (dy /length) * arrowSize, arrowTip.y - (dx / length) * arrowSize};
+              // output the arrow barline and color
+              g -> set_color(ezgl::RED);
+              g -> set_line_width(2);
+              g -> draw_line(midPoint, arrowTip);
+              g -> draw_line(arrowTip, arrowLeft);
+              g -> draw_line(arrowTip, arrowRight);
+           }
+        }
     }
 }
 
