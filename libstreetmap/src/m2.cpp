@@ -39,6 +39,7 @@ void drawRoads(ezgl::renderer *g);
 
 std::vector<std::vector<ezgl::point2d>> roads;  // Store each road as a list of points
 std::vector<int> road_types;
+std::vector<bool> oneWayRoad;
 std::unordered_map<OSMID, std::string> osmHighway;
 
 double avgLat;
@@ -61,6 +62,7 @@ void loadHighway(){
          std::pair<std::string, std::string> tag = getTagPair(way, j);
          if(tag.first == "highway"){
             osmHighway[way->id()] = tag.second;
+            std::cout << "Highway Found: " << way->id() << " Type: " << tag.second << std::endl;
             break;
          }
       }
@@ -73,13 +75,17 @@ int classify_road(OSMID way_id){
       return 1;
    }
    std::string roadType = osmHighway[way_id];
+   std::cout << "Road ID:" << way_id << ", Type: " << roadType << std::endl;
    if(roadType == "motorway" || roadType == "trunk" || roadType == "expressway"){
       return 3;
    }
-   if(roadType == "primary" || roadType == "secondary" || roadType == "tertiary"){
+   else if(roadType == "primary"){
       return 2;
    }
-   return 1;
+   else if(roadType == "secondary" || roadType == "tertiary"){
+      return 1;
+   }
+   return 0;
 }
 
 
@@ -104,6 +110,7 @@ void calculate_map_bound(double &min_lat, double &max_lat, double &min_lon, doub
 void load_road_data() {
     roads.clear();
     road_types.clear();
+    oneWayRoad.clear();
 
     for (int i = 0; i < getNumStreetSegments(); i++) {
         StreetSegmentInfo seg = getStreetSegmentInfo(i);
@@ -129,16 +136,14 @@ void load_road_data() {
 }
 
 // Draw Roads Based on Classification
-void draw_main_canvas(ezgl::renderer *g) {
-    g->set_color(220, 220, 220);
-    g->fill_rectangle(g->get_visible_world());
-
-
-    drawFeatures(g);
-    drawRoads(g);
-
-
+void draw_main_canvas(ezgl::renderer *g)
+{
+   g->set_color(220, 220, 220);
+   g->fill_rectangle(g->get_visible_world());
     
+    drawFeatures(g);
+    drawRoads(g);    
+
 }
 
 // Set Initial View Using LatLon Bounds
