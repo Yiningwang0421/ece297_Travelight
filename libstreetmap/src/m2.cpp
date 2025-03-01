@@ -22,11 +22,13 @@
 #include "m1.h"
 #include "m2.h"
 #include "StreetsDatabaseAPI.h"
+#include "OSMDatabaseAPI.h"
 #include <ezgl/application.hpp>
 #include <ezgl/graphics.hpp>
 #include <ezgl/rectangle.hpp>
 #include <vector>
 #include <iostream>
+#include <unordered_map>
 
 
 void drawFeatures(ezgl::renderer *g);
@@ -35,6 +37,7 @@ void drawFeatures(ezgl::renderer *g);
 
 std::vector<std::pair<ezgl::point2d, ezgl::point2d>> roads;
 std::vector<int> road_types;
+std::unordered_map<OSMID, std::string> osmHighway;
 
 double avgLat;
 
@@ -46,6 +49,38 @@ double x_from_lon(double lon) {
 double y_from_lat(double lat) {
     return lat * kDegreeToRadian * kEarthRadiusInMeters;
 }
+
+void loadHighway(){
+   osmHighway.clear();
+   int numWays = getNumberOfWays();
+   for(int i = 0; i < numWays; i++){
+      const OSMWay *way = getWayByIndex(i);
+      for(int j = 0; j < getTagCount(way); j++){
+         std::pair<std::string, std::string> tag = getTagPair(way, j);
+         if(tag.first == "highway"){
+            osmHighway[way->id()] = tag.second;
+            break;
+         }
+      }
+   }
+}
+
+//differentiate road type
+int classify_road(OSMID way_id){
+   if(osmHighway.find(way_id) == osmHighway.end()){
+      return 1;
+   }
+   std::string roadType = osmHighway[way_id];
+   if(roadType == "motorway" || roadType == "trunk" || roadType == "expressway"){
+      return 3;
+   }
+   if(roadType == "primary" || roadType == "secondary" || roadType == "tertiary"){
+      return 2;
+   }
+   return 1;
+}
+
+
 
 // Determine Map Boundaries
 void calculate_map_bound(double &min_lat, double &max_lat, double &min_lon, double &max_lon) {
@@ -63,13 +98,6 @@ void calculate_map_bound(double &min_lat, double &max_lat, double &min_lon, doub
     avgLat = (max_lat + min_lat) / 2.0;
 }
 
-// Classify Roads Based on Speed
-int classify_road(double speed_kmh) {
-    if (speed_kmh > 80.0) return 3;  // Highway (Orange)
-    if (speed_kmh > 40.0) return 2;  // Main Roads (Gray)
-    return 1;  // Secondary Roads (White)
-}
-
 // Load Roads and Convert to ezgl::point2d
 void load_road_data() {
     roads.clear();
@@ -85,10 +113,7 @@ void load_road_data() {
         ezgl::point2d end_point(x_from_lon(end.longitude()), y_from_lat(end.latitude()));
 
         roads.emplace_back(start_point, end_point);
-
-        // Convert speed to km/h
-        double speed_kmh = seg.speedLimit * 3.6;
-        road_types.push_back(classify_road(speed_kmh));
+        road_types.push_back(classify_road(seg.wayOSMID));
     }
 }
 
@@ -142,6 +167,7 @@ void drawMap() {
 
     ezgl::application application(settings);
     setInterface(application);
+    loadHighway();
     load_road_data();
     application.run(nullptr, nullptr, nullptr, nullptr);
 }
