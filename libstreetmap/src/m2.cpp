@@ -40,6 +40,10 @@ double getZoomLevel(ezgl::renderer *g, double initial_width);
 
 
 std::vector<std::vector<ezgl::point2d>> roads;  // Store each road as a list of points
+//<a href="https://www.flaticon.com/free-icons/poi" title="poi icons">Poi icons created by Muhammad_Usman - Flaticon</a>
+ezgl::surface *poi_icon;
+
+std::vector<ezgl::point2d> POIs;
 std::vector<int> road_types;
 std::vector<bool> oneWayRoad;
 std::unordered_map<OSMID, std::string> osmHighway;
@@ -135,6 +139,17 @@ void load_road_data() {
     }
 }
 
+//Load the plane projections of Points of Interest
+void load_poi_data(){
+    POIs.clear();
+    for (int i=0; i<getNumPointsOfInterest(); i++){
+        LatLon pos = getPOIPosition(i);
+        
+        ezgl::point2d projection(x_from_lon(pos.longitude()), y_from_lat(pos.latitude()));
+        POIs.push_back(projection);
+    }
+}
+
 // Draw Roads Based on Classification
 void draw_main_canvas(ezgl::renderer *g)
 {
@@ -172,7 +187,8 @@ void drawMap() {
     ezgl::application application(settings);
     setInterface(application);
     loadHighway();
-    load_road_data();
+    load_road_data();   
+    load_poi_data();
     application.run(nullptr, nullptr, nullptr, nullptr);
 }
 
