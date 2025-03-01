@@ -47,6 +47,10 @@ void setInterface(ezgl::application &application);
 
 // global variables
 std::vector<std::vector<ezgl::point2d>> roads;  // Store each road as a list of points
+//<a href="https://www.flaticon.com/free-icons/poi" title="poi icons">Poi icons created by Muhammad_Usman - Flaticon</a>
+ezgl::surface *poi_icon;
+
+std::vector<ezgl::point2d> POIs;
 std::vector<int> road_types;
 std::vector<bool> oneWayRoad;
 std::unordered_map<OSMID, std::string> osmHighway;
@@ -217,6 +221,17 @@ void load_road_data() {
     }
 }
 
+//Load the plane projections of Points of Interest
+void load_poi_data(){
+    POIs.clear();
+    for (int i=0; i<getNumPointsOfInterest(); i++){
+        LatLon pos = getPOIPosition(i);
+        
+        ezgl::point2d projection(x_from_lon(pos.longitude()), y_from_lat(pos.latitude()));
+        POIs.push_back(projection);
+    }
+}
+
 // Draw Roads Based on Classification
 void draw_main_canvas(ezgl::renderer *g)
 {
@@ -225,8 +240,17 @@ void draw_main_canvas(ezgl::renderer *g)
    
    double zoomLevel = g -> get_visible_screen().width();
     drawFeatures(g);
-    drawRoads(g, zoomLevel);    
-
+    drawRoads(g);    
+ 
+    poi_icon = g->load_png("libstreetmap/resources/point_of_interest.png");
+    int scalingFac = 2000000/g->get_visible_world().area();
+    scalingFac = std::min(scalingFac, 5);
+    for (size_t i=0; i<POIs.size();i++){
+        if (g->get_visible_world().area() < 2000000 && g->get_visible_world().contains(POIs[i])){
+            g->draw_surface(poi_icon,POIs[i], 0.03*scalingFac);
+        }
+    }
+    g->free_surface(poi_icon);
 }
 
 // Set Initial View Using LatLon Bounds
@@ -252,7 +276,8 @@ void drawMap() {
     ezgl::application application(settings);
     setInterface(application);
     loadHighway();
-    load_road_data();
+    load_road_data();   
+    load_poi_data();
     application.run(nullptr, nullptr, nullptr, nullptr);
 }
 
