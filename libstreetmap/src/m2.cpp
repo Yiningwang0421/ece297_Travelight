@@ -60,7 +60,6 @@ void loadHighway(){
          std::pair<std::string, std::string> tag = getTagPair(way, j);
          if(tag.first == "highway"){
             osmHighway[way->id()] = tag.second;
-            std::cout << "Highway Found: " << way->id() << " Type: " << tag.second << std::endl;
             break;
          }
       }
@@ -73,7 +72,6 @@ int classify_road(OSMID way_id){
       return 1;
    }
    std::string roadType = osmHighway[way_id];
-   std::cout << "Road ID:" << way_id << ", Type: " << roadType << std::endl;
    if(roadType == "motorway" || roadType == "trunk" || roadType == "expressway"){
       return 3;
    }
