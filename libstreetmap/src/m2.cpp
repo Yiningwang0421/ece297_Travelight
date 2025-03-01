@@ -28,6 +28,11 @@
 #include <vector>
 #include <iostream>
 
+
+void drawFeatures(ezgl::renderer *g);
+
+
+
 std::vector<std::pair<ezgl::point2d, ezgl::point2d>> roads;
 std::vector<int> road_types;
 
@@ -89,8 +94,14 @@ void load_road_data() {
 
 // Draw Roads Based on Classification
 void draw_main_canvas(ezgl::renderer *g) {
-    g->set_color(200, 200, 200);
+    g->set_color(220, 220, 220);
     g->fill_rectangle(g->get_visible_world());
+
+
+    drawFeatures(g);
+
+
+
 
     for (size_t i = 0; i < roads.size(); i++) {
         if (road_types[i] == 3) {
@@ -106,6 +117,7 @@ void draw_main_canvas(ezgl::renderer *g) {
 
         g->draw_line(roads[i].first, roads[i].second);
     }
+    
 }
 
 // Set Initial View Using LatLon Bounds
@@ -132,4 +144,45 @@ void drawMap() {
     setInterface(application);
     load_road_data();
     application.run(nullptr, nullptr, nullptr, nullptr);
+}
+
+void drawFeatures(ezgl::renderer *g) {
+    for (FeatureIdx i = 0; i < getNumFeatures(); i++) {
+        FeatureType type = getFeatureType(i);
+        int numPoints = getNumFeaturePoints(i);
+
+        if (numPoints < 2) continue;
+
+        std::vector<ezgl::point2d> points;
+        for (int j = 0; j < numPoints; j++) {
+            LatLon latlon = getFeaturePoint(i, j);
+            points.push_back(ezgl::point2d(x_from_lon(latlon.longitude()), y_from_lat(latlon.latitude())));
+        }
+
+        if (type == PARK || type == GREENSPACE) {
+            g->set_color(181, 220, 159); 
+        } else if (type == LAKE) {
+            g->set_color(173, 216, 230); 
+        } else if (type == BEACH) {
+            g->set_color(238, 214, 175); 
+        } else if (type == ISLAND) {
+            g->set_color(205, 183, 158); 
+        } else if (type == GOLFCOURSE) {
+            g->set_color(119, 221, 119); 
+        } else if (type == BUILDING) {
+            g->set_color(169, 169, 169); 
+        } else {
+            g->set_color(0, 0, 0); 
+        }
+
+        if (type != RIVER && type != STREAM) {
+            g->fill_poly(points);
+        } else {
+            g->set_color(173, 216, 230);
+            g->set_line_width(2);
+            for (size_t j = 0; j < points.size() - 1; j++) {
+                g->draw_line(points[j], points[j + 1]);
+            }
+        }
+    }
 }
