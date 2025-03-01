@@ -32,7 +32,7 @@
 #include <unordered_set>
 
 // function declarations
-void drawFeatures(ezgl::renderer *g);
+void drawFeatures(ezgl::renderer *g, double zoomLevel);
 void drawRoads(ezgl::renderer *g, double zoomLevel);
 double x_from_lon(double lon);
 double y_from_lat(double lat);
@@ -90,10 +90,10 @@ int classify_road(OSMID way_id){
    if(roadType == "motorway" || roadType == "trunk" || roadType == "expressway"){
       return 3;
    }
-   else if(roadType == "primary"){
+   else if(roadType == "primary" || roadType == "tertiary" ){
       return 2;
    }
-   else if(roadType == "secondary" || roadType == "tertiary"){
+   else if(roadType == "secondary"){
       return 1;
    }
    return 0;
@@ -239,8 +239,8 @@ void draw_main_canvas(ezgl::renderer *g)
    g->fill_rectangle(g->get_visible_world());
    
    double zoomLevel = g -> get_visible_screen().width();
-    drawFeatures(g);
-    drawRoads(g);    
+    drawFeatures(g, zoomLevel);
+    drawRoads(g, zoomLevel);    
  
     poi_icon = g->load_png("libstreetmap/resources/point_of_interest.png");
     int scalingFac = 2000000/g->get_visible_world().area();
@@ -281,12 +281,14 @@ void drawMap() {
     application.run(nullptr, nullptr, nullptr, nullptr);
 }
 
-void drawFeatures(ezgl::renderer *g) {
+void drawFeatures(ezgl::renderer *g, double zoomLevel) {
     for (FeatureIdx i = 0; i < getNumFeatures(); i++) {
         FeatureType type = getFeatureType(i);
         int numPoints = getNumFeaturePoints(i);
-
         if (numPoints < 2) continue;
+
+        // Skip drawing buildings unless zoom > 30
+        if (type == BUILDING && zoomLevel < 60) continue;
 
         std::vector<ezgl::point2d> points;
         for (int j = 0; j < numPoints; j++) {
@@ -294,26 +296,27 @@ void drawFeatures(ezgl::renderer *g) {
             points.push_back(ezgl::point2d(x_from_lon(latlon.longitude()), y_from_lat(latlon.latitude())));
         }
 
+        // Feature Colors
         if (type == PARK || type == GREENSPACE) {
-            g->set_color(181, 220, 159); 
-        } else if (type == LAKE) {
-            g->set_color(173, 216, 230); 
+            g->set_color(181, 220, 159);
+        } else if (type == LAKE || type == RIVER || type == STREAM) {
+            g->set_color(173, 216, 230);
         } else if (type == BEACH) {
-            g->set_color(238, 214, 175); 
+            g->set_color(238, 214, 175);
         } else if (type == ISLAND) {
-            g->set_color(205, 183, 158); 
+            g->set_color(205, 183, 158);
         } else if (type == GOLFCOURSE) {
-            g->set_color(119, 221, 119); 
+            g->set_color(119, 221, 119);
         } else if (type == BUILDING) {
-            g->set_color(169, 169, 169); 
+            g->set_color(169, 169, 169);
         } else {
-            g->set_color(0, 0, 0); 
+            g->set_color(0, 0, 0);
         }
 
+        // Draw feature shape
         if (type != RIVER && type != STREAM) {
             g->fill_poly(points);
         } else {
-            g->set_color(173, 216, 230);
             g->set_line_width(2);
             for (size_t j = 0; j < points.size() - 1; j++) {
                 g->draw_line(points[j], points[j + 1]);
@@ -323,17 +326,35 @@ void drawFeatures(ezgl::renderer *g) {
 }
 
 void drawRoads(ezgl::renderer *g, double zoomLevel) {
-   if(zoomLevel <= 15000){
-      drawStreetSegments(g, 1);
-   }
-   else if(zoomLevel <= 70000){
-      drawStreetSegments(g, 2);
-   }
-   else{
-      drawStreetSegments(g, 3);
-   }
+    for (int i = 0; i < roads.size(); i++) {
+        int roadType = road_types[i];
 
-   if(zoomLevel < 5000){
-      drawStreetNames(g, zoomLevel);
-   }
+        // Skip roads based on zoom level
+        if (zoomLevel < 2 && roadType != 3 ) continue;  // Show only highways
+        if (zoomLevel < 4 && ((roadType == 1)||(roadType == 0))) continue;  // Hide secondary roads
+        if (zoomLevel < 30 && roadType == 0) continue;  // Hide main roads
+        
+        // Set road color & width
+        if (roadType == 3) {
+            g->set_color(255, 140, 0);  // Highways
+            g->set_line_width(3);
+        } else if (roadType == 2) {
+            g->set_color(150, 150, 150);  // Major roads
+            g->set_line_width(3);
+        } else {
+            g->set_color(ezgl::WHITE);  // Secondary roads
+            g->set_line_width(1);
+        }
+
+        // Draw road as a polyline
+        for (size_t j = 0; j < roads[i].size() - 1; j++) {
+            g->draw_line(roads[i][j], roads[i][j + 1]);
+        }
+    }
+}
+
+
+double getZoomLevel(ezgl::renderer *g, double initial_width) {
+    double current_width = g->get_visible_world().width();
+    return initial_width / current_width;  // Zoom ratio
 }
