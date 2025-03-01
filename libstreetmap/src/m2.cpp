@@ -21,65 +21,115 @@
 
 #include "m1.h"
 #include "m2.h"
-#include "ezgl/application.hpp"
-#include "ezgl/graphics.hpp"
 #include "StreetsDatabaseAPI.h"
+#include <ezgl/application.hpp>
+#include <ezgl/graphics.hpp>
+#include <ezgl/rectangle.hpp>
 #include <vector>
 #include <iostream>
-#include <sstream>
-#include <cmath>
 
-//global variables
-double avgLat = 0;
+std::vector<std::pair<ezgl::point2d, ezgl::point2d>> roads;
+std::vector<int> road_types;
 
-double x_from_lon(double lon){
-   return lon * kDegreeToRadian * kEarthRadiusInMeters * std::cos(avgLat * kDegreeToRadian);
+double avgLat;
 
+// Convert Latitude/Longitude to X/Y using Equirectangular Projection
+double x_from_lon(double lon) {
+    return lon * kDegreeToRadian * kEarthRadiusInMeters * cos(avgLat * kDegreeToRadian);
 }
 
-double y_from_lon(double lat){
-   return lat * kDegreeToRadian * kEarthRadiusInMeters * std::cos(avgLat * kDegreeToRadian);
+double y_from_lat(double lat) {
+    return lat * kDegreeToRadian * kEarthRadiusInMeters;
 }
 
-void drawMainCanvas(ezgl::renderer *g){
-   g -> set_color(ezgl::WHITE);
-   g -> fill_rectangle(g -> get_visible_world());
-   g -> set_color(ezgl::BLACK);
-   for(int i = 0; i < getNumStreetSegments(); i++){
-      StreetSegmentInfo segment = getStreetSegmentInfo(i);
-      ezgl::point2d from = {x_from_lon(getIntersectionPosition(segment.from).longitude()),
-      y_from_lon(getIntersectionPosition(segment.from).latitude())};
-      ezgl::point2d to = {x_from_lon(getIntersectionPosition(segment.to).longitude()),
-      y_from_lon(getIntersectionPosition(segment.to).latitude())};
-      g -> draw_line(from, to);
-      int curveP = segment.numCurvePoints;
-      if(curveP > 0){
-         ezgl::point2d prev = from;
-         for(int j = 0; j < curveP; j++){
-            LatLon curve_pt = getStreetSegmentCurvePoint(i, j);
-            ezgl::point2d next = {x_from_lon(curve_pt.longitude()), y_from_lon(curve_pt.latitude())};
-            g -> draw_line(prev, next);
-            prev = next;
-         }
-         g -> draw_line(prev, to);
-      }
-   }
+// Determine Map Boundaries
+void calculate_map_bound(double &min_lat, double &max_lat, double &min_lon, double &max_lon) {
+    min_lat = max_lat = getIntersectionPosition(0).latitude();
+    min_lon = max_lon = getIntersectionPosition(0).longitude();
+
+    for (int i = 1; i < getNumIntersections(); i++) {
+        LatLon pos = getIntersectionPosition(i);
+        min_lat = std::min(min_lat, pos.latitude());
+        max_lat = std::max(max_lat, pos.latitude());
+        min_lon = std::min(min_lon, pos.longitude());
+        max_lon = std::max(max_lon, pos.longitude());
+    }
+
+    avgLat = (max_lat + min_lat) / 2.0;
 }
 
+// Classify Roads Based on Speed
+int classify_road(double speed_kmh) {
+    if (speed_kmh > 80.0) return 3;  // Highway (Orange)
+    if (speed_kmh > 40.0) return 2;  // Main Roads (Gray)
+    return 1;  // Secondary Roads (White)
+}
+
+// Load Roads and Convert to ezgl::point2d
+void load_road_data() {
+    roads.clear();
+    road_types.clear();
+
+    for (int i = 0; i < getNumStreetSegments(); i++) {
+        StreetSegmentInfo seg = getStreetSegmentInfo(i);
+        LatLon start = getIntersectionPosition(seg.from);
+        LatLon end = getIntersectionPosition(seg.to);
+
+        // Convert LatLon to X/Y
+        ezgl::point2d start_point(x_from_lon(start.longitude()), y_from_lat(start.latitude()));
+        ezgl::point2d end_point(x_from_lon(end.longitude()), y_from_lat(end.latitude()));
+
+        roads.emplace_back(start_point, end_point);
+
+        // Convert speed to km/h
+        double speed_kmh = seg.speedLimit * 3.6;
+        road_types.push_back(classify_road(speed_kmh));
+    }
+}
+
+// Draw Roads Based on Classification
+void draw_main_canvas(ezgl::renderer *g) {
+    g->set_color(200, 200, 200);
+    g->fill_rectangle(g->get_visible_world());
+
+    for (size_t i = 0; i < roads.size(); i++) {
+        if (road_types[i] == 3) {
+            g->set_color(255, 140, 0);  // Orange for Highways
+            g->set_line_width(6);
+        } else if (road_types[i] == 2) {
+            g->set_color(150, 150, 150);  // Gray for Main Roads
+            g->set_line_width(4);
+        } else {
+            g->set_color(ezgl::WHITE);  // White for Secondary Roads
+            g->set_line_width(2);
+        }
+
+        g->draw_line(roads[i].first, roads[i].second);
+    }
+}
+
+// Set Initial View Using LatLon Bounds
+void setInterface(ezgl::application &application) {
+    double min_lat, max_lat, min_lon, max_lon;
+    calculate_map_bound(min_lat, max_lat, min_lon, max_lon);
+
+    ezgl::rectangle initial_world(
+        {x_from_lon(min_lon), y_from_lat(min_lat)},
+        {x_from_lon(max_lon), y_from_lat(max_lat)}
+    );
+
+    application.add_canvas("MainCanvas", draw_main_canvas, initial_world);
+}
+
+// Main Draw Function
 void drawMap() {
-   // Set up the ezgl graphics window and hand control to it, as shown in the 
-   // ezgl example program. 
-   // This function will be called by both the unit tests (ece297exercise) 
-   // and your main() function in main/src/main.cpp.
-   // The unit tests always call loadMap() before calling this function
-   // and call closeMap() after this function returns.
-   ezgl::application::settings settings;
-   settings.main_ui_resource = "libstreetmap/resources/main.ui";
-   settings.window_identifier = "MainWindow";
-   settings.canvas_identifier = "MainCanvas";
-   ezgl::application app(settings);
-   ezgl::rectangle initial_world({0, 0}, {1000, 1000});
-   app.add_canvas("MainCanvas", drawMainCanvas, initial_world);
-   app.run(nullptr, nullptr, nullptr, nullptr);
-}
+    ezgl::application::settings settings;
+    settings.main_ui_resource = "libstreetmap/resources/main.ui";
+    settings.window_identifier = "MainWindow";
+    settings.canvas_identifier = "MainCanvas";
 
+    ezgl::application application(settings);
+    setInterface(application);
+    load_road_data();
+    application.run(nullptr, nullptr, nullptr, nullptr);
+}
