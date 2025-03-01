@@ -31,22 +31,22 @@
 #include <unordered_map>
 #include <unordered_set>
 
-
+// function declarations
 void drawFeatures(ezgl::renderer *g);
+void drawRoads(ezgl::renderer *g, double zoomLevel);
 double x_from_lon(double lon);
 double y_from_lat(double lat);
 void loadHighway();
-int  classify_road(OSMID way_id);
+int classify_road(OSMID way_id);
 void calculate_map_bound(double &min_lat, double &max_lat, double &min_lon, double &max_lon);
-void drawStreetSegments(ezgl::renderer *g, int priority, double zoomLevel);
-void drawStreetName(ezgl::renderer *g, ezgl::point2d start, ezgl::point2d end, std::string name);
+void drawStreetSegments(ezgl::renderer *g, int priority);
+void drawStreetNames(ezgl::renderer *g, double zoomLevel);
 void load_road_data();
 void draw_main_canvas(ezgl::renderer *g);
 void setInterface(ezgl::application &application);
 
-
-
-std::vector<std::pair<ezgl::point2d, ezgl::point2d>> roads;
+// global variables
+std::vector<std::vector<ezgl::point2d>> roads;  // Store each road as a list of points
 std::vector<int> road_types;
 std::vector<bool> oneWayRoad;
 std::unordered_map<OSMID, std::string> osmHighway;
@@ -114,8 +114,7 @@ void calculate_map_bound(double &min_lat, double &max_lat, double &min_lon, doub
 }
 
 //output the road based on the classified osm type
-void drawStreetSegments(ezgl::renderer *g, int priority, double zoomLevel){
-   std::unordered_set<std::string> drawnNames;
+void drawStreetSegments(ezgl::renderer *g, int priority){
    for(size_t i = 0; i < roads.size(); i++){
       int roadType = road_types[i];
       if(priority == 3 && roadType < 3){
@@ -124,48 +123,69 @@ void drawStreetSegments(ezgl::renderer *g, int priority, double zoomLevel){
       if(priority == 2 && roadType < 2){
          continue;
       }
+
       if(roadType == 3){
-         g -> set_color(255, 140, 0);
-         g -> set_line_width(5);
+         g->set_color(255, 140, 0);
+         g->set_line_width(5);
       }
       else if(roadType == 2){
-         g -> set_color(150, 150, 150);
-         g -> set_line_width(4);
+         g->set_color(156, 150, 150);
+         g->set_line_width(4);
       }
       else{
-         g -> set_color(ezgl::WHITE);
-         g -> set_line_width(3);
+         g->set_color(ezgl::WHITE);
+         g->set_line_width(3);
       }
-      g -> draw_line(roads[i].first, roads[i].second);
-      
-      // show road name only when zoomed in maximum view
-      if(priority == 1 && zoomLevel < 8000){
-         if(i >= getNumStreetSegments()){continue;}
-         StreetSegmentInfo segInfo = getStreetSegmentInfo(i);
-         if(segInfo.streetID < 0 || segInfo.streetID >= getNumStreets()){ continue; }
-         std::string streetName = getStreetName(segInfo.streetID);
-         if(!streetName.empty() && drawnNames.find(streetName) == drawnNames.end()){
-            drawStreetName(g, roads[i].first, roads[i].second, streetName);
-            drawnNames.insert(streetName);
-         }
+      for(size_t j = 0; j < roads[i].size() - 1; j++){
+         g->draw_line(roads[i][j], roads[i][j+1]);
       }
    }
 }
 
-void drawStreetName(ezgl::renderer *g, ezgl::point2d start, ezgl::point2d end, std::string name){
-   if(name.empty()){ //no names case
-      return;
+void drawStreetNames(ezgl::renderer *g, double zoomLevel)
+{
+   if (zoomLevel >= 5000)
+   {
+      return; // Only draw names when zoomed in
    }
-   ezgl::point2d midPoint((start.x + end.x) / 2, (start.y + end.y) / 2);
-   double dx = end.x - start.x;
-   double dy = end.y - start.y;
-   double length = sqrt(dx * dx + dy * dy);
-   dx = dx / length;
-   dy = dy / length;
-   ezgl::point2d textPos(midPoint.x + dx * 10, midPoint.y + dy * 10);
-   g -> set_font_size(10);
-   g -> set_color(ezgl::BLACK);
-   g -> draw_text(textPos, name);
+
+   std::unordered_set<std::string> drawnNames;
+
+   for (size_t i = 0; i < roads.size(); i++)
+   {
+      StreetSegmentInfo segInfo = getStreetSegmentInfo(i);
+      std::string streetName = getStreetName(segInfo.streetID);
+
+      if (streetName.empty() || drawnNames.find(streetName) != drawnNames.end())
+      {
+         continue; // Skip if no name or already drawn
+      }
+
+      // Find the longest segment for text placement
+      size_t maxIdx = 0;
+      double maxLen = 0;
+
+      for (size_t j = 0; j < roads[i].size() - 1; j++)
+      {
+         double length = sqrt(pow(roads[i][j + 1].x - roads[i][j].x, 2) +
+                              pow(roads[i][j + 1].y - roads[i][j].y, 2));
+         if (length > maxLen)
+         {
+            maxLen = length;
+            maxIdx = j;
+         }
+      }
+
+      ezgl::point2d start = roads[i][maxIdx];
+      ezgl::point2d end = roads[i][maxIdx + 1];
+      ezgl::point2d midPoint((start.x + end.x) / 2, (start.y + end.y) / 2);
+
+      g->set_font_size(10);
+      g->set_color(ezgl::BLACK);
+      g->draw_text(midPoint, streetName);
+
+      drawnNames.insert(streetName); // Ensure we don't draw the same name multiple times
+   }
 }
 
 // Load Roads and Convert to ezgl::point2d
@@ -176,23 +196,24 @@ void load_road_data() {
 
     for (int i = 0; i < getNumStreetSegments(); i++) {
         StreetSegmentInfo seg = getStreetSegmentInfo(i);
+        std::vector<ezgl::point2d> road_points;
+
+        // Convert intersection positions
         LatLon start = getIntersectionPosition(seg.from);
         LatLon end = getIntersectionPosition(seg.to);
+        road_points.push_back({x_from_lon(start.longitude()), y_from_lat(start.latitude())});
 
-        ezgl::point2d prev_point(x_from_lon(start.longitude()), y_from_lat(start.latitude()));
+        // Convert curve points (if any)
         for (int j = 0; j < seg.numCurvePoints; j++) {
             LatLon curve = getStreetSegmentCurvePoint(i, j);
-            ezgl::point2d curve_point(x_from_lon(curve.longitude()), y_from_lat(curve.latitude()));
-            roads.emplace_back(prev_point, curve_point);
-            road_types.push_back(classify_road(seg.wayOSMID));
-            oneWayRoad.push_back(seg.oneWay);
-            prev_point = curve_point; // Update previous point
+            road_points.push_back({x_from_lon(curve.longitude()), y_from_lat(curve.latitude())});
         }
 
-        ezgl::point2d end_point(x_from_lon(end.longitude()), y_from_lat(end.latitude()));
-        roads.emplace_back(prev_point, end_point);
-        road_types.push_back(classify_road(seg.wayOSMID));
-        oneWayRoad.push_back(seg.oneWay);
+        // Add end position
+        road_points.push_back({x_from_lon(end.longitude()), y_from_lat(end.latitude())});
+
+        roads.push_back(road_points);
+        road_types.push_back(classify_road(seg.wayOSMID));  // Classify road type
     }
 }
 
@@ -201,22 +222,11 @@ void draw_main_canvas(ezgl::renderer *g)
 {
    g->set_color(220, 220, 220);
    g->fill_rectangle(g->get_visible_world());
-   double zoomLevel = g -> get_visible_world().width();
    
-   //draw features
-   drawFeatures(g);
+   double zoomLevel = g -> get_visible_screen().width();
+    drawFeatures(g);
+    drawRoads(g, zoomLevel);    
 
-   if(zoomLevel <= 10000){
-      drawStreetSegments(g, 1, zoomLevel);
-   }
-   else if(zoomLevel <= 70000){
-      drawStreetSegments(g, 2, zoomLevel);
-   }
-   else{
-      drawStreetSegments(g, 3, zoomLevel);
-   }
-   
-   //indiate the one way street
 }
 
 // Set Initial View Using LatLon Bounds
@@ -285,4 +295,20 @@ void drawFeatures(ezgl::renderer *g) {
             }
         }
     }
+}
+
+void drawRoads(ezgl::renderer *g, double zoomLevel) {
+   if(zoomLevel <= 15000){
+      drawStreetSegments(g, 1);
+   }
+   else if(zoomLevel <= 70000){
+      drawStreetSegments(g, 2);
+   }
+   else{
+      drawStreetSegments(g, 3);
+   }
+
+   if(zoomLevel < 5000){
+      drawStreetNames(g, zoomLevel);
+   }
 }
