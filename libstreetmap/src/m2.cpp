@@ -32,10 +32,12 @@
 
 
 void drawFeatures(ezgl::renderer *g);
+void drawRoads(ezgl::renderer *g);
 
 
 
-std::vector<std::pair<ezgl::point2d, ezgl::point2d>> roads;
+
+std::vector<std::vector<ezgl::point2d>> roads;  // Store each road as a list of points
 std::vector<int> road_types;
 std::unordered_map<OSMID, std::string> osmHighway;
 
@@ -105,23 +107,24 @@ void load_road_data() {
 
     for (int i = 0; i < getNumStreetSegments(); i++) {
         StreetSegmentInfo seg = getStreetSegmentInfo(i);
+        std::vector<ezgl::point2d> road_points;
+
+        // Convert intersection positions
         LatLon start = getIntersectionPosition(seg.from);
         LatLon end = getIntersectionPosition(seg.to);
+        road_points.push_back({x_from_lon(start.longitude()), y_from_lat(start.latitude())});
 
-        ezgl::point2d prev_point(x_from_lon(start.longitude()), y_from_lat(start.latitude()));
-
+        // Convert curve points (if any)
         for (int j = 0; j < seg.numCurvePoints; j++) {
             LatLon curve = getStreetSegmentCurvePoint(i, j);
-            ezgl::point2d curve_point(x_from_lon(curve.longitude()), y_from_lat(curve.latitude()));
-
-            roads.emplace_back(prev_point, curve_point);
-            prev_point = curve_point; // Update previous point
+            road_points.push_back({x_from_lon(curve.longitude()), y_from_lat(curve.latitude())});
         }
 
-        ezgl::point2d end_point(x_from_lon(end.longitude()), y_from_lat(end.latitude()));
-        roads.emplace_back(prev_point, end_point);
+        // Add end position
+        road_points.push_back({x_from_lon(end.longitude()), y_from_lat(end.latitude())});
 
-        road_types.push_back(classify_road(seg.wayOSMID));
+        roads.push_back(road_points);
+        road_types.push_back(classify_road(seg.wayOSMID));  // Classify road type
     }
 }
 
@@ -132,24 +135,9 @@ void draw_main_canvas(ezgl::renderer *g) {
 
 
     drawFeatures(g);
+    drawRoads(g);
 
 
-
-
-    for (size_t i = 0; i < roads.size(); i++) {
-        if (road_types[i] == 3) {
-            g->set_color(255, 140, 0);  // Orange for Highways
-            g->set_line_width(3);
-        } else if (road_types[i] == 2) {
-            g->set_color(150, 150, 150);  // Gray for Main Roads
-            g->set_line_width(3);
-        } else {
-            g->set_color(ezgl::WHITE);  // White for Secondary Roads
-            g->set_line_width(2);
-        }
-
-        g->draw_line(roads[i].first, roads[i].second);
-    }
     
 }
 
@@ -217,6 +205,26 @@ void drawFeatures(ezgl::renderer *g) {
             for (size_t j = 0; j < points.size() - 1; j++) {
                 g->draw_line(points[j], points[j + 1]);
             }
+        }
+    }
+}
+
+void drawRoads(ezgl::renderer *g) {
+    for (size_t i = 0; i < roads.size(); i++) {
+        if (road_types[i] == 3) {
+            g->set_color(255, 140, 0);  // Orange for Highways
+            g->set_line_width(3);
+        } else if (road_types[i] == 2) {
+            g->set_color(150, 150, 150);  // Gray for Main Roads
+            g->set_line_width(3);
+        } else {
+            g->set_color(ezgl::WHITE);  // White for Secondary Roads
+            g->set_line_width(2);
+        }
+
+        // Draw the full polyline
+        for (int j = 0; j < roads[i].size() - 1; j++) {
+            g->draw_line(roads[i][j], roads[i][j + 1]);
         }
     }
 }
