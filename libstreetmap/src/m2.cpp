@@ -120,14 +120,13 @@ void load_road_data() {
         for (int j = 0; j < seg.numCurvePoints; j++) {
             LatLon curve = getStreetSegmentCurvePoint(i, j);
             ezgl::point2d curve_point(x_from_lon(curve.longitude()), y_from_lat(curve.latitude()));
-
             roads.emplace_back(prev_point, curve_point);
+            road_types.push_back(classify_road(seg.wayOSMID));
             prev_point = curve_point; // Update previous point
         }
 
         ezgl::point2d end_point(x_from_lon(end.longitude()), y_from_lat(end.latitude()));
         roads.emplace_back(prev_point, end_point);
-
         road_types.push_back(classify_road(seg.wayOSMID));
         oneWayRoad.push_back(seg.oneWay);
     }
@@ -139,7 +138,6 @@ void draw_main_canvas(ezgl::renderer *g)
    g->set_color(220, 220, 220);
    g->fill_rectangle(g->get_visible_world());
 
-   drawFeatures(g);
    for (size_t i = 0; i < roads.size(); i++)
    {
       if (road_types[i] == 3)
@@ -160,6 +158,7 @@ void draw_main_canvas(ezgl::renderer *g)
 
       g->draw_line(roads[i].first, roads[i].second);
    }
+   drawFeatures(g);
    //indiate the one way street
 }
 
