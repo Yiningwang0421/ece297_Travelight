@@ -60,6 +60,7 @@ void loadHighway(){
          std::pair<std::string, std::string> tag = getTagPair(way, j);
          if(tag.first == "highway"){
             osmHighway[way->id()] = tag.second;
+            std::cout << "Highway Found: " << way->id() << " Type: " << tag.second << std::endl;
             break;
          }
       }
@@ -72,13 +73,17 @@ int classify_road(OSMID way_id){
       return 1;
    }
    std::string roadType = osmHighway[way_id];
+   std::cout << "Road ID:" << way_id << ", Type: " << roadType << std::endl;
    if(roadType == "motorway" || roadType == "trunk" || roadType == "expressway"){
       return 3;
    }
-   if(roadType == "primary" || roadType == "secondary" || roadType == "tertiary"){
+   else if(roadType == "primary"){
       return 2;
    }
-   return 1;
+   else if(roadType == "secondary" || roadType == "tertiary"){
+      return 1;
+   }
+   return 0;
 }
 
 
@@ -129,52 +134,33 @@ void load_road_data() {
 }
 
 // Draw Roads Based on Classification
-void draw_main_canvas(ezgl::renderer *g) {
-    g->set_color(220, 220, 220);
-    g->fill_rectangle(g->get_visible_world());
+void draw_main_canvas(ezgl::renderer *g)
+{
+   g->set_color(220, 220, 220);
+   g->fill_rectangle(g->get_visible_world());
 
+   drawFeatures(g);
+   for (size_t i = 0; i < roads.size(); i++)
+   {
+      if (road_types[i] == 3)
+      {
+         g->set_color(255, 140, 0); // Orange for Highways
+         g->set_line_width(6);
+      }
+      else if (road_types[i] == 2)
+      {
+         g->set_color(150, 150, 150); // Gray for Main Roads
+         g->set_line_width(3);
+      }
+      else
+      {
+         g->set_color(ezgl::WHITE); // White for Secondary Roads
+         g->set_line_width(2);
+      }
 
-    drawFeatures(g);
-
-
-
-
-    for (size_t i = 0; i < roads.size(); i++) {
-        if (road_types[i] == 3) {
-            g->set_color(255, 140, 0);  // Orange for Highways
-            g->set_line_width(3);
-        } else if (road_types[i] == 2) {
-            g->set_color(150, 150, 150);  // Gray for Main Roads
-            g->set_line_width(3);
-        } else {
-            g->set_color(ezgl::WHITE);  // White for Secondary Roads
-            g->set_line_width(2);
-        }
-
-        g->draw_line(roads[i].first, roads[i].second);
-        
-        //indiate the one way street
-        if(i < oneWayRoad.size() && oneWayRoad[i]){
-           double dx = roads[i].second.x - roads[i].first.x;
-           double dy = roads[i].second.y - roads[i].first.y;
-           double length = sqrt(dx * dx + dy * dy);
-           if(length > 5){
-              ezgl::point2d midPoint = {(roads[i].first.x + roads[i].second.x) / 2, roads[i].first.y + roads[i].second.y / 2};
-              double scale = length * 0.25;
-              ezgl::point2d arrowTip = {midPoint.x + (dx / length) * scale, midPoint.y + (dy / length) * scale};
-              double arrowSize = scale * 0.6;
-              ezgl::point2d arrowLeft = {arrowTip.x - (dy / length) * arrowSize, arrowTip.y + (dx / length) * arrowSize};
-              ezgl::point2d arrowRight = {arrowTip.x + (dy /length) * arrowSize, arrowTip.y - (dx / length) * arrowSize};
-              // output the arrow barline and color
-              g -> set_color(ezgl::RED);
-              g -> set_line_width(2);
-              g -> draw_line(midPoint, arrowTip);
-              g -> draw_line(arrowTip, arrowLeft);
-              g -> draw_line(arrowTip, arrowRight);
-           }
-        }
-    }
-    
+      g->draw_line(roads[i].first, roads[i].second);
+   }
+   //indiate the one way street
 }
 
 // Set Initial View Using LatLon Bounds
