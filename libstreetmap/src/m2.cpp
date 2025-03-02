@@ -29,11 +29,22 @@
 #include <vector>
 #include <iostream>
 #include <unordered_map>
+#include <sstream>  // Required for std::istringstream
+
 
 
 void drawFeatures(ezgl::renderer *g, double zoomLevel);
 void drawRoads(ezgl::renderer *g, double zoomLevel);
 double getZoomLevel(ezgl::renderer *g, double initial_width);
+ezgl::point2d findLargestInscribedRectangle(FeatureIdx feature_id);
+std::string splitTextIntoLines(const std::string& text);
+void drawFeatureShapes(ezgl::renderer *g, double zoomLevel);
+void drawFeatureNames(ezgl::renderer *g, double zoomLevel);
+void drawRiverNames(ezgl::renderer *g, double zoomLevel);
+
+
+
+
 
 
 
@@ -49,6 +60,8 @@ std::vector<bool> oneWayRoad;
 std::unordered_map<OSMID, std::string> osmHighway;
 
 double avgLat;
+
+
 
 // Convert Latitude/Longitude to X/Y using Equirectangular Projection
 double x_from_lon(double lon) {
@@ -104,7 +117,7 @@ void calculate_map_bound(double &min_lat, double &max_lat, double &min_lon, doub
         min_lat = std::min(min_lat, pos.latitude());
         max_lat = std::max(max_lat, pos.latitude());
         min_lon = std::min(min_lon, pos.longitude());
-        max_lon = std::max(max_lon, pos.longitude());
+        max_lon = std::max(max_lon, pos.longitude());   
     }
 
     avgLat = (max_lat + min_lat) / 2.0;
@@ -156,9 +169,12 @@ void draw_main_canvas(ezgl::renderer *g)
    g->set_color(220, 220, 220);
    g->fill_rectangle(g->get_visible_world());
 
+
+
    static double initial_width = g->get_visible_world().width();  // Store at first call
    double zoomLevel = getZoomLevel(g, initial_width);  // Get zoom level
-    
+
+
     drawFeatures(g, zoomLevel);
     drawRoads(g, zoomLevel);    
 
@@ -193,12 +209,20 @@ void drawMap() {
 }
 
 void drawFeatures(ezgl::renderer *g, double zoomLevel) {
+    drawFeatureShapes(g, zoomLevel);  
+    drawFeatureNames(g, zoomLevel);   
+    drawRiverNames(g, zoomLevel);     
+}
+
+
+
+void drawFeatureShapes(ezgl::renderer *g, double zoomLevel) {
     for (FeatureIdx i = 0; i < getNumFeatures(); i++) {
         FeatureType type = getFeatureType(i);
         int numPoints = getNumFeaturePoints(i);
         if (numPoints < 2) continue;
 
-        // Skip drawing buildings unless zoom > 30
+        // Skip drawing buildings unless zoom > 60
         if (type == BUILDING && zoomLevel < 60) continue;
 
         std::vector<ezgl::point2d> points;
@@ -236,6 +260,8 @@ void drawFeatures(ezgl::renderer *g, double zoomLevel) {
     }
 }
 
+
+
 void drawRoads(ezgl::renderer *g, double zoomLevel) {
     for (int i = 0; i < roads.size(); i++) {
         int roadType = road_types[i];
@@ -269,3 +295,89 @@ double getZoomLevel(ezgl::renderer *g, double initial_width) {
     double current_width = g->get_visible_world().width();
     return initial_width / current_width;  // Zoom ratio
 }
+
+// Function to Draw River Names Along the River's Path
+void drawRiverNames(ezgl::renderer *g, double zoomLevel) {
+    if (zoomLevel < 20) return;
+
+    for (FeatureIdx i = 0; i < getNumFeatures(); i++) {
+        FeatureType type = getFeatureType(i);
+        if (type != RIVER) continue;
+
+        std::string featureName = getFeatureName(i);
+        if (featureName.empty() || featureName == "<noname>") continue;
+
+        std::vector<ezgl::point2d> points;
+        for (int j = 0; j < getNumFeaturePoints(i); j++) {
+            LatLon latlon = getFeaturePoint(i, j);
+            points.push_back(ezgl::point2d(x_from_lon(latlon.longitude()), y_from_lat(latlon.latitude())));
+        }
+
+        for (size_t j = 0; j < points.size() - 1; j++) {
+            ezgl::point2d mid((points[j].x + points[j + 1].x) / 2, (points[j].y + points[j + 1].y) / 2);
+            double segmentLength = sqrt(pow(points[j + 1].x - points[j].x, 2) + pow(points[j + 1].y - points[j].y, 2));
+
+
+            double angle = atan2(points[j + 1].y - points[j].y, points[j + 1].x - points[j].x) * 180.0 / M_PI;
+            if (angle < 0) angle += 180; 
+            g->set_color(ezgl::BLACK);
+            g->set_font_size(10);
+            g->set_text_rotation(angle);
+            g->draw_text(mid, featureName);
+        }
+    }
+}
+
+void drawFeatureNames(ezgl::renderer *g, double zoomLevel) {
+    if (zoomLevel < 100) return;
+
+    for (FeatureIdx i = 0; i < getNumFeatures(); i++) {
+        FeatureType type = getFeatureType(i);
+        if (type == ISLAND || type == STREAM) continue; 
+        std::string featureName = getFeatureName(i);
+        if (featureName.empty() || featureName == "<noname>") continue;
+
+        double featureArea = findFeatureArea(i);
+        if (featureArea < 100) continue;  
+
+        ezgl::point2d center = findLargestInscribedRectangle(i);
+        g->set_color(ezgl::BLACK);
+
+        int fontsize = 8;
+        if (featureArea > 4000) {
+            fontsize = 10;
+        } else if (featureArea > 1000) {
+            fontsize = 9;
+        }
+
+        g->set_font_size(fontsize);
+        g->draw_text(center, featureName);
+    }
+}
+
+
+
+// Finds the largest inscribed rectangle inside a closed feature
+ezgl::point2d findLargestInscribedRectangle(FeatureIdx feature_id) {
+    int numPoints = getNumFeaturePoints(feature_id);
+    if (numPoints < 3) return {0, 0};  // Invalid shape
+
+    double min_x = DBL_MAX, min_y = DBL_MAX;
+    double max_x = -DBL_MAX, max_y = -DBL_MAX;
+
+    std::vector<ezgl::point2d> points;
+    for (int i = 0; i < numPoints; i++) {
+        LatLon latlon = getFeaturePoint(feature_id, i);
+        ezgl::point2d p = {x_from_lon(latlon.longitude()), y_from_lat(latlon.latitude())};
+        points.push_back(p);
+        min_x = std::min(min_x, p.x);
+        max_x = std::max(max_x, p.x);
+        min_y = std::min(min_y, p.y);
+        max_y = std::max(max_y, p.y);
+    }
+
+    // Compute the rectangle center
+    ezgl::point2d center((min_x + max_x) / 2, (min_y + max_y) / 2);
+    return center;
+}
+
