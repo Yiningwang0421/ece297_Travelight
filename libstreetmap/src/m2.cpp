@@ -49,8 +49,7 @@ void loadHighway();
 void loadPOIs();
 int classify_road(OSMID way_id);
 void calculate_map_bound(double &min_lat, double &max_lat, double &min_lon, double &max_lon);
-void drawStreetSegments(ezgl::renderer *g, int priority);
-void drawStreetNames(ezgl::renderer *g, double zoomLevel);
+void drawStreetNames(ezgl::renderer *g);
 double getZoomLevel(ezgl::renderer *g, double initial_width);
 ezgl::point2d findLargestInscribedRectangle(FeatureIdx feature_id);
 std::string splitTextIntoLines(const std::string& text);
@@ -58,6 +57,8 @@ void drawFeatureShapes(ezgl::renderer *g, double zoomLevel);
 void drawFeatureNames(ezgl::renderer *g, double zoomLevel);
 void drawRiverNames(ezgl::renderer *g, double zoomLevel);
 void drawPOIs(ezgl::renderer *g, double zoomLevel);
+
+bool showStreetNames = true;  
 
 struct Intersection{
     LatLon pos;
@@ -106,11 +107,7 @@ std::vector<RoadLabel> secondary;  // RoadType 1
 std::vector<RoadLabel> minor;      // RoadType 0
 
 
-
-
-
-
-
+// Convert Latitude/Longitude to X/Y using Equirectangular Projection
 double x_from_lon(double lon) {
     return lon * kDegreeToRadian * kEarthRadiusInMeters * cos(avgLat * kDegreeToRadian);
 }
@@ -126,8 +123,6 @@ double lon_from_x(double x){
 double lat_from_y(double y){
     return y / kDegreeToRadian / kEarthRadiusInMeters;
 }
-
-
 
 void loadHighway(){
    osmHighway.clear();
@@ -169,6 +164,7 @@ int classify_road(OSMID way_id){
 
 
 
+
 // Determine Map Boundaries
 void calculate_map_bound(double &min_lat, double &max_lat, double &min_lon, double &max_lon) {
     min_lat = max_lat = getIntersectionPosition(0).latitude();
@@ -184,9 +180,6 @@ void calculate_map_bound(double &min_lat, double &max_lat, double &min_lon, doub
 
     avgLat = (max_lat + min_lat) / 2.0;
 }
-
-
-
 
 // Load Roads and Convert to ezgl::point2d
 void load_road_data() {
@@ -230,8 +223,6 @@ void loadPOIs(){
     }
 }
 
-
-
 void loadIntersections(){
     for(int i=0; i<getNumIntersections(); i++){
         Intersection newInter;
@@ -242,8 +233,6 @@ void loadIntersections(){
     }
 }
 
-
-
 // Draw Roads Based on Classification
 void draw_main_canvas(ezgl::renderer *g)
 {
@@ -251,19 +240,22 @@ void draw_main_canvas(ezgl::renderer *g)
    g->fill_rectangle(g->get_visible_world());
    
    static double initial_width = g->get_visible_world().width();
-    zoomLevel = getZoomLevel(g, initial_width);
-   
+   zoomLevel = getZoomLevel(g, initial_width);
+
    fontSize = std::max(6.0, 9.0 * zoomLevel / 300.0);
 
+
+    drawStreetNames(g);
     drawFeatures(g, zoomLevel);
+    
+    
+    
     drawRoads(g, zoomLevel);
-    if (zoomLevel > 260)
+    drawIntersectionHighlight(g);
+   if (zoomLevel > 260)
     {
         drawPOIs(g, zoomLevel);
     }
-    drawStreetNames(g,zoomLevel);
-    drawIntersectionHighlight(g); 
-   
 }
 
 // Set Initial View Using LatLon Bounds
@@ -296,8 +288,6 @@ void act_on_mouse_click(ezgl::application* app, GdkEventButton* event, double x,
     }
 }
 
-
-
 // Main Draw Function
 void drawMap() {
     ezgl::application::settings settings;
@@ -312,7 +302,8 @@ void drawMap() {
     loadPOIs();
     loadIntersections();
     pre_load_road_data();
-    application.run(nullptr, nullptr, nullptr, nullptr);
+
+    application.run(nullptr, act_on_mouse_click, nullptr, nullptr);
 }
 
 void drawFeatures(ezgl::renderer *g, double zoomLevel) {
@@ -320,6 +311,8 @@ void drawFeatures(ezgl::renderer *g, double zoomLevel) {
     drawFeatureNames(g, zoomLevel);   
     drawRiverNames(g, zoomLevel);     
 }
+
+
 
 void drawFeatureShapes(ezgl::renderer *g, double zoomLevel) {
     for (FeatureIdx i = 0; i < getNumFeatures(); i++) {
@@ -349,8 +342,6 @@ void drawFeatureShapes(ezgl::renderer *g, double zoomLevel) {
             g->set_color(119, 221, 119);
         } else if (type == BUILDING) {
             g->set_color(169, 169, 169);
-        } else if (type == GLACIER) {
-            g->set_color(230, 240, 240);
         } else {
             g->set_color(0, 0, 0);
         }
@@ -406,9 +397,10 @@ void drawPOIs(ezgl::renderer *g, double zoomLevel){
             g->draw_surface(poi_icon,POIs[i], 0.01*iconFac);
             if (scalingFac>=50){
                 g->set_color(0,0,0);
-                g->set_font_size(fontSize);
+                g->set_font_size(10.0);
                 ezgl::point2d textPos (POIs[i].x, POIs[i].y-3500/zoomLevel);
                 g->draw_text(textPos, poiNames[i], 5, 5);
+                g->set_text_rotation(0);
             }
         }
     }
@@ -467,20 +459,18 @@ void drawFeatureNames(ezgl::renderer *g, double zoomLevel) {
 
     for (FeatureIdx i = 0; i < getNumFeatures(); i++) {
         FeatureType type = getFeatureType(i);
-        if (type == RIVER || type == STREAM) continue; 
+        if (type == ISLAND || type == STREAM) continue; 
         std::string featureName = getFeatureName(i);
         if (featureName.empty() || featureName == "<noname>") continue;
 
         double featureArea = findFeatureArea(i);
-        if (featureArea < (100*zoomLevel/300)) continue;  
+        if (featureArea < 100) continue;  
 
         ezgl::point2d center = findLargestInscribedRectangle(i);
         g->set_color(ezgl::BLACK);
-
-    
-
         g->set_font_size(fontSize);
         g->draw_text(center, featureName);
+        g->set_text_rotation(0);
     }
 }
 
@@ -488,14 +478,12 @@ void drawIntersectionHighlight(ezgl::renderer *g){
     for(int i=0; i<intersections.size(); i++){
         if(intersections[i].highlight && zoomLevel > 5){
             g->set_color(255,0,0);
-            g->fill_arc(ezgl::point2d(x_from_lon(intersections[i].pos.longitude()), y_from_lat(intersections[i].pos.latitude())), 1/50*zoomLevel, 0, 360);
+            g->fill_arc(ezgl::point2d(x_from_lon(intersections[i].pos.longitude()), y_from_lat(intersections[i].pos.latitude())), 500/zoomLevel, 0, 360);
         }
     }
 }
 
-
-
-// Finds the largest inscribed rectangle inside a closed feature (this part is helped by chatgpt)
+// Finds the largest inscribed rectangle inside a closed feature
 ezgl::point2d findLargestInscribedRectangle(FeatureIdx feature_id) {
     int numPoints = getNumFeaturePoints(feature_id);
     if (numPoints < 3) return {0, 0};  // Invalid shape
@@ -519,16 +507,14 @@ ezgl::point2d findLargestInscribedRectangle(FeatureIdx feature_id) {
     return center;
 }
 
-
-
-void drawStreetNames(ezgl::renderer *g, double zoomLevel) {
+void drawStreetNames(ezgl::renderer *g) {
     if (zoomLevel < 100) return;  // Skip rendering at low zoom levels
 
-    g->set_font_size(fontSize);
+    g->set_font_size(9);
     g->set_color(ezgl::BLACK);
 
     // **Always draw highways if zoom level is at least 100**
-    if (zoomLevel >= 166) {
+    if (zoomLevel >= 165) {
         for (const RoadLabel &road : highways) {
             g->set_text_rotation(road.angle);
             g->draw_text(road.position, road.name);
@@ -536,7 +522,7 @@ void drawStreetNames(ezgl::renderer *g, double zoomLevel) {
     }
 
     // **Draw main roads if zoom level is at least 166**
-    if (zoomLevel >= 166) {
+    if (zoomLevel >= 165) {
         for (const RoadLabel &road : main_roads) {
             g->set_text_rotation(road.angle);
             g->draw_text(road.position, road.name);
@@ -544,7 +530,7 @@ void drawStreetNames(ezgl::renderer *g, double zoomLevel) {
     }
 
     // **Draw secondary roads if zoom level is at least 25000**
-    if (zoomLevel >= 25000) {
+    if (zoomLevel >= 1500) {
         for (const RoadLabel &road : secondary) {
             g->set_text_rotation(road.angle);
             g->draw_text(road.position, road.name);
@@ -552,7 +538,7 @@ void drawStreetNames(ezgl::renderer *g, double zoomLevel) {
     }
 
     // **Draw minor roads if zoom level is at least 5000**
-    if (zoomLevel >= 5000) {
+    if (zoomLevel >= 2000) {
         for (const RoadLabel &road : minor) {
             g->set_text_rotation(road.angle);
             g->draw_text(road.position, road.name);
@@ -572,18 +558,20 @@ void pre_load_road_data() {
         const auto& segment_ids = streetSegmentVector[street_id];
         if (segment_ids.empty()) continue;
 
-        // **Step 1: Compute Total Street Length**
+        // **Step 1: Compute Total Street Length & Midpoint Target**
         double total_length = 0.0;
         for (StreetSegmentIdx seg_id : segment_ids) {
             total_length += findStreetSegmentLength(seg_id);
         }
-        if (total_length < 500) continue;  // Ignore short streets
+        if (total_length < 1000) continue;  // 忽略短街道
 
-        // **Step 2: Generate Labels Every 500m**
+        double target_distance = total_length / 2.0; // **找到整条路的中点**
         double accumulated_distance = 0.0;
-        ezgl::point2d last_label_position;
+        bool label_placed = false;
 
         for (StreetSegmentIdx seg_id : segment_ids) {
+            if (label_placed) break;  // **一条路只放一个标注，跳出循环**
+
             StreetSegmentInfo seg_info = getStreetSegmentInfo(seg_id);
 
             // **Convert LatLon to pixel coordinates**
@@ -597,24 +585,30 @@ void pre_load_road_data() {
                 y_from_lat(getIntersectionPosition(seg_info.to).latitude())
             };
 
-            // **Step 3: Label Placement Along the Street**
+            // **累积距离**
             double segment_length = findStreetSegmentLength(seg_id);
             accumulated_distance += segment_length;
 
-            if (accumulated_distance >= 500.0) {
-                // Compute label position (midpoint of the segment)
-                ezgl::point2d label_pos = {(start.x + end.x) / 2, (start.y + end.y) / 2};
+            if (accumulated_distance >= target_distance) {
+                // **计算标注点位置（在当前路段的相应位置）**
+                double remaining_distance = target_distance - (accumulated_distance - segment_length);
+                double ratio = remaining_distance / segment_length;
 
-                // Compute rotation angle
+                ezgl::point2d label_pos = {
+                    start.x + ratio * (end.x - start.x),
+                    start.y + ratio * (end.y - start.y)
+                };
+
+                // **计算角度**
                 double dx = end.x - start.x;
                 double dy = end.y - start.y;
                 double angle = atan2(dy, dx) * 180.0 / M_PI;
-                if (angle < 0) angle += 180;  // Normalize angle
+                if (angle < 0) angle += 180;  // **保持正向**
 
-                // Store label
+                // **存储标注**
                 RoadLabel label = {label_pos, angle, getStreetName(street_id)};
-                
-                // **Step 4: Assign to Correct Road Type**
+
+                // **按道路类型分类**
                 int road_class = classify_road(seg_info.wayOSMID);
                 switch (road_class) {
                     case 3: highways.push_back(label); break;
@@ -623,8 +617,13 @@ void pre_load_road_data() {
                     default: minor.push_back(label); break;
                 }
 
-                accumulated_distance = 0;  // Reset distance counter
+                label_placed = true;  // **一条路只标记一次**
             }
         }
     }
+}
+
+void toggle_street_names(GtkWidget *, ezgl::application *application) {
+    showStreetNames = !showStreetNames;  // 切换状态
+    application->refresh_drawing();      // 重新绘制界面
 }

@@ -18,7 +18,7 @@
           <object class="GtkGrid" id="InnerGrid">
             <property name="visible">True</property>
             <property name="can-focus">False</property>
-            <property name="margin-right">23</property>
+            <property name="baseline-row">1</property>
             <child>
               <object class="GtkButton" id="LeftButton">
                 <property name="visible">True</property>
@@ -160,7 +160,7 @@
           </object>
           <packing>
             <property name="left-attach">1</property>
-            <property name="top-attach">1</property>
+            <property name="top-attach">2</property>
           </packing>
         </child>
         <child>
@@ -172,7 +172,7 @@
           </object>
           <packing>
             <property name="left-attach">0</property>
-            <property name="top-attach">2</property>
+            <property name="top-attach">3</property>
             <property name="width">2</property>
           </packing>
         </child>
@@ -186,6 +186,7 @@
           <packing>
             <property name="left-attach">0</property>
             <property name="top-attach">1</property>
+            <property name="height">2</property>
           </packing>
         </child>
         <child>
@@ -196,11 +197,13 @@
               <object class="GtkEntry" id="search_entry">
                 <property name="visible">True</property>
                 <property name="can-focus">True</property>
-                <property name="placeholder-text" translatable="yes">Search Maps</property>
+                <property name="max-length">2</property>
+                <property name="placeholder-text" translatable="yes">Enter Maps</property>
               </object>
               <packing>
                 <property name="expand">True</property>
                 <property name="fill">True</property>
+                <property name="padding">10</property>
                 <property name="position">0</property>
               </packing>
             </child>
@@ -216,7 +219,6 @@
             <property name="visible">True</property>
             <property name="can-focus">True</property>
             <property name="receives-default">True</property>
-            <property name="margin-left">11</property>
           </object>
           <packing>
             <property name="left-attach">1</property>
@@ -224,10 +226,16 @@
           </packing>
         </child>
         <child>
-          <placeholder/>
-        </child>
-        <child>
-          <placeholder/>
+          <object class="GtkButton" id="ToggleStreetNamesButton">
+            <property name="label" translatable="yes">Street Name</property>
+            <property name="visible">True</property>
+            <property name="can-focus">True</property>
+            <property name="receives-default">True</property>
+          </object>
+          <packing>
+            <property name="left-attach">1</property>
+            <property name="top-attach">1</property>
+          </packing>
         </child>
         <child>
           <placeholder/>
