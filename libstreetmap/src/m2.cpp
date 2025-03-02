@@ -32,9 +32,19 @@
 #include <sstream>  // Required for std::istringstream
 
 
+#include <unordered_set>
 
+
+// function declarations
 void drawFeatures(ezgl::renderer *g, double zoomLevel);
 void drawRoads(ezgl::renderer *g, double zoomLevel);
+double x_from_lon(double lon);
+double y_from_lat(double lat);
+void loadHighway();
+int classify_road(OSMID way_id);
+void calculate_map_bound(double &min_lat, double &max_lat, double &min_lon, double &max_lon);
+void drawStreetSegments(ezgl::renderer *g, int priority);
+void drawStreetNames(ezgl::renderer *g, double zoomLevel);
 double getZoomLevel(ezgl::renderer *g, double initial_width);
 ezgl::point2d findLargestInscribedRectangle(FeatureIdx feature_id);
 std::string splitTextIntoLines(const std::string& text);
@@ -42,14 +52,11 @@ void drawFeatureShapes(ezgl::renderer *g, double zoomLevel);
 void drawFeatureNames(ezgl::renderer *g, double zoomLevel);
 void drawRiverNames(ezgl::renderer *g, double zoomLevel);
 
+void load_road_data();
+void draw_main_canvas(ezgl::renderer *g);
+void setInterface(ezgl::application &application);
 
-
-
-
-
-
-
-
+// global variables
 std::vector<std::vector<ezgl::point2d>> roads;  // Store each road as a list of points
 //<a href="https://www.flaticon.com/free-icons/poi" title="poi icons">Poi icons created by Muhammad_Usman - Flaticon</a>
 ezgl::surface *poi_icon;
@@ -123,6 +130,81 @@ void calculate_map_bound(double &min_lat, double &max_lat, double &min_lon, doub
     avgLat = (max_lat + min_lat) / 2.0;
 }
 
+//output the road based on the classified osm type
+// void drawStreetSegments(ezgl::renderer *g, int priority){
+//    for(size_t i = 0; i < roads.size(); i++){
+//       int roadType = road_types[i];
+//       if(priority == 3 && roadType < 3){
+//          continue;
+//       }
+//       if(priority == 2 && roadType < 2){
+//          continue;
+//       }
+
+//       if(roadType == 3){
+//          g->set_color(255, 140, 0);
+//          g->set_line_width(5);
+//       }
+//       else if(roadType == 2){
+//          g->set_color(156, 150, 150);
+//          g->set_line_width(4);
+//       }
+//       else{
+//          g->set_color(ezgl::WHITE);
+//          g->set_line_width(3);
+//       }
+//       for(size_t j = 0; j < roads[i].size() - 1; j++){
+//          g->draw_line(roads[i][j], roads[i][j+1]);
+//       }
+//    }
+// }
+
+void drawStreetNames(ezgl::renderer *g, double zoomLevel)
+{
+   if (zoomLevel >= 5000)
+   {
+      return; // Only draw names when zoomed in
+   }
+
+   std::unordered_set<std::string> drawnNames;
+
+   for (size_t i = 0; i < roads.size(); i++)
+   {
+      StreetSegmentInfo segInfo = getStreetSegmentInfo(i);
+      std::string streetName = getStreetName(segInfo.streetID);
+
+      if (streetName.empty() || drawnNames.find(streetName) != drawnNames.end())
+      {
+         continue; // Skip if no name or already drawn
+      }
+
+      // Find the longest segment for text placement
+      size_t maxIdx = 0;
+      double maxLen = 0;
+
+      for (size_t j = 0; j < roads[i].size() - 1; j++)
+      {
+         double length = sqrt(pow(roads[i][j + 1].x - roads[i][j].x, 2) +
+                              pow(roads[i][j + 1].y - roads[i][j].y, 2));
+         if (length > maxLen)
+         {
+            maxLen = length;
+            maxIdx = j;
+         }
+      }
+
+      ezgl::point2d start = roads[i][maxIdx];
+      ezgl::point2d end = roads[i][maxIdx + 1];
+      ezgl::point2d midPoint((start.x + end.x) / 2, (start.y + end.y) / 2);
+
+      g->set_font_size(10);
+      g->set_color(ezgl::BLACK);
+      g->draw_text(midPoint, streetName);
+
+      drawnNames.insert(streetName); // Ensure we don't draw the same name multiple times
+   }
+}
+
 // Load Roads and Convert to ezgl::point2d
 void load_road_data() {
     roads.clear();
@@ -168,6 +250,9 @@ void draw_main_canvas(ezgl::renderer *g)
 {
    g->set_color(220, 220, 220);
    g->fill_rectangle(g->get_visible_world());
+   
+   static double initial_width = g->get_visible_world().width();
+   double zoomLevel = getZoomLevel(g, initial_width);
 
 
 
@@ -177,7 +262,16 @@ void draw_main_canvas(ezgl::renderer *g)
 
     drawFeatures(g, zoomLevel);
     drawRoads(g, zoomLevel);    
-
+ 
+    poi_icon = g->load_png("libstreetmap/resources/point_of_interest.png");
+    int scalingFac = 2000000/g->get_visible_world().area();
+    scalingFac = std::min(scalingFac, 5);
+    for (size_t i=0; i<POIs.size();i++){
+        if (g->get_visible_world().area() < 2000000 && g->get_visible_world().contains(POIs[i])){
+            g->draw_surface(poi_icon,POIs[i], 0.03*scalingFac);
+        }
+    }
+    g->free_surface(poi_icon);
 }
 
 // Set Initial View Using LatLon Bounds
@@ -289,7 +383,6 @@ void drawRoads(ezgl::renderer *g, double zoomLevel) {
         }
     }
 }
-
 
 double getZoomLevel(ezgl::renderer *g, double initial_width) {
     double current_width = g->get_visible_world().width();
