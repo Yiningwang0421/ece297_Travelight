@@ -77,6 +77,10 @@ std::vector<int> road_types;
 std::vector<bool> oneWayRoad;
 std::vector<std::string> poiNames;
 std::vector<Intersection> intersections;
+std::vector<std::string> mapOptions = {"Beijing, China","Beirut, Lebanon", "Berlin, Germany", "Boston, USA", 
+    "Cape Town, South Africa", "Golden Horseshoe, Canada", "Hamilton, Canada", "Hong Kong, China",
+    "Iceland", "Interlaken, Switzerland", "London, UK", "New Delhi, India", "New York, USA", "Rio de Janeiro, Brazil", 
+    "Saint Helena", "Singapore", "Tehran, Iran", "Tokyo, Japan", "Toronto, Canada"};
 std::unordered_map<OSMID, std::string> osmHighway;
 
 double avgLat;
@@ -296,7 +300,7 @@ void draw_main_canvas(ezgl::renderer *g)
     {
         drawPOIs(g, zoomLevel);
     }
-    drawStreetNames(g,zoomLevel);
+    //drawStreetNames(g,zoomLevel);
     drawIntersectionHighlight(g);
 }
 
@@ -348,8 +352,8 @@ void drawMap() {
 
 void drawFeatures(ezgl::renderer *g, double zoomLevel) {
     drawFeatureShapes(g, zoomLevel);  
-    drawFeatureNames(g, zoomLevel);   
-    drawRiverNames(g, zoomLevel);     
+    //drawFeatureNames(g, zoomLevel);   
+    //drawRiverNames(g, zoomLevel);     
 }
 
 
