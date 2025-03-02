@@ -39,8 +39,11 @@
 void drawFeatures(ezgl::renderer *g, double zoomLevel);
 void drawRoads(ezgl::renderer *g, double zoomLevel);
 void drawPOIs(ezgl::renderer *g, double zoomLevel);
+void drawIntersectionHighlight(ezgl::renderer *g);
 double x_from_lon(double lon);
 double y_from_lat(double lat);
+double lon_from_x(double x);
+double lat_from_y(double y);
 void loadHighway();
 void loadPOIs();
 int classify_road(OSMID way_id);
@@ -55,6 +58,11 @@ void drawFeatureNames(ezgl::renderer *g, double zoomLevel);
 void drawRiverNames(ezgl::renderer *g, double zoomLevel);
 void drawPOIs(ezgl::renderer *g, double zoomLevel);
 void pre_load_road_data();
+struct Intersection{
+    LatLon pos;
+    std::string name;
+    bool highlight;
+};
 
 void load_road_data();
 void draw_main_canvas(ezgl::renderer *g);
@@ -69,6 +77,7 @@ std::vector<ezgl::point2d> POIs;
 std::vector<int> road_types;
 std::vector<bool> oneWayRoad;
 std::vector<std::string> poiNames;
+std::vector<Intersection> intersections;
 std::unordered_map<OSMID, std::string> osmHighway;
 
 extern std::vector<std::vector<StreetSegmentIdx>> streetSegmentVector;
@@ -98,6 +107,14 @@ double x_from_lon(double lon) {
 
 double y_from_lat(double lat) {
     return lat * kDegreeToRadian * kEarthRadiusInMeters;
+}
+
+double lon_from_x(double x){
+    return x / kDegreeToRadian / kEarthRadiusInMeters / cos(avgLat * kDegreeToRadian);
+}
+
+double lat_from_y(double y){
+    return y / kDegreeToRadian / kEarthRadiusInMeters;
 }
 
 void loadHighway(){
@@ -239,6 +256,16 @@ void loadPOIs(){
     }
 }
 
+void loadIntersections(){
+    for(int i=0; i<getNumIntersections(); i++){
+        Intersection newInter;
+        newInter.name = getIntersectionName(i);
+        newInter.pos = getIntersectionPosition(i);
+        newInter.highlight = false;
+        intersections.push_back(newInter);
+    }
+}
+
 // Draw Roads Based on Classification
 void draw_main_canvas(ezgl::renderer *g)
 {
@@ -251,12 +278,12 @@ void draw_main_canvas(ezgl::renderer *g)
 
     drawFeatures(g, zoomLevel);
     drawRoads(g, zoomLevel);
-    if (zoomLevel > 260)
+    if (zoomLevel > 166)
     {
         drawPOIs(g, zoomLevel);
     }
     drawStreetNames(g,zoomLevel);
-   
+    drawIntersectionHighlight(g);
 }
 
 // Set Initial View Using LatLon Bounds
@@ -273,6 +300,23 @@ void setInterface(ezgl::application &application) {
     
 }
 
+void act_on_mouse_click(ezgl::application* app, GdkEventButton* event, double x, double y){
+    LatLon pos = LatLon(lat_from_y(y), lon_from_x(x));
+    int inter_id = findClosestIntersection(pos);
+    if(findDistanceBetweenTwoPoints(pos, getIntersectionPosition(inter_id)) < 500/zoomLevel){
+        if (!intersections[inter_id].highlight){
+            intersections[inter_id].highlight = true;
+            std::stringstream ss;
+            ss << "Intersection: "<<intersections[inter_id].name;
+            app->update_message(ss.str());
+        }
+        else{
+            intersections[inter_id].highlight = false;
+        }
+        app->refresh_drawing();
+    }
+}
+
 // Main Draw Function
 void drawMap() {
     ezgl::application::settings settings;
@@ -286,7 +330,8 @@ void drawMap() {
     load_road_data();   
     loadPOIs();
     pre_load_road_data();
-    application.run(nullptr, nullptr, nullptr, nullptr);
+    loadIntersections();
+    application.run(nullptr, act_on_mouse_click, nullptr, nullptr);
 }
 
 void drawFeatures(ezgl::renderer *g, double zoomLevel) {
@@ -460,7 +505,14 @@ void drawFeatureNames(ezgl::renderer *g, double zoomLevel) {
     }
 }
 
-
+void drawIntersectionHighlight(ezgl::renderer *g){
+    for(int i=0; i<intersections.size(); i++){
+        if(intersections[i].highlight && zoomLevel > 5){
+            g->set_color(255,0,0);
+            g->fill_arc(ezgl::point2d(x_from_lon(intersections[i].pos.longitude()), y_from_lat(intersections[i].pos.latitude())), 500/zoomLevel, 0, 360);
+        }
+    }
+}
 
 // Finds the largest inscribed rectangle inside a closed feature (this part is helped by chatgpt)
 ezgl::point2d findLargestInscribedRectangle(FeatureIdx feature_id) {
