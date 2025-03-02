@@ -255,11 +255,6 @@ void draw_main_canvas(ezgl::renderer *g)
    double zoomLevel = getZoomLevel(g, initial_width);
 
 
-
-   static double initial_width = g->get_visible_world().width();  // Store at first call
-   double zoomLevel = getZoomLevel(g, initial_width);  // Get zoom level
-
-
     drawFeatures(g, zoomLevel);
     drawRoads(g, zoomLevel);    
  
