@@ -166,48 +166,50 @@ void calculate_map_bound(double &min_lat, double &max_lat, double &min_lon, doub
 
 void drawStreetNames(ezgl::renderer *g, double zoomLevel)
 {
-   if (zoomLevel >= 200)
-   {
-      return; // Only draw names when zoomed in
-   }
+    if (zoomLevel < 200) return; // Only draw names when zoomed in sufficiently
 
-   std::unordered_set<std::string> drawnNames;
+    for (size_t i = 0; i < roads.size(); i++)
+    {
+        StreetSegmentInfo segInfo = getStreetSegmentInfo(i);
+        std::string streetName = getStreetName(segInfo.streetID);
 
-   for (size_t i = 0; i < roads.size(); i++)
-   {
-      StreetSegmentInfo segInfo = getStreetSegmentInfo(i);
-      std::string streetName = getStreetName(segInfo.streetID);
+        if (streetName.empty() || streetName == "<noname>") continue; // Skip unnamed streets
 
-      if (streetName.empty() || drawnNames.find(streetName) != drawnNames.end())
-      {
-         continue; // Skip if no name or already drawn
-      }
+        // Find the longest segment for text placement
+        size_t maxIdx = 0;
+        double maxLen = 0;
 
-      // Find the longest segment for text placement
-      size_t maxIdx = 0;
-      double maxLen = 0;
+        for (size_t j = 0; j < roads[i].size() - 1; j++)
+        {
+            double length = sqrt(pow(roads[i][j + 1].x - roads[i][j].x, 2) +
+                                 pow(roads[i][j + 1].y - roads[i][j].y, 2));
+            if (length > maxLen)
+            {
+                maxLen = length;
+                maxIdx = j;
+            }
+        }
 
-      for (size_t j = 0; j < roads[i].size() - 1; j++)
-      {
-         double length = sqrt(pow(roads[i][j + 1].x - roads[i][j].x, 2) +
-                              pow(roads[i][j + 1].y - roads[i][j].y, 2));
-         if (length > maxLen)
-         {
-            maxLen = length;
-            maxIdx = j;
-         }
-      }
+        // Skip segments that are too short for text placement
+        if (maxLen < 100) continue;
 
-      ezgl::point2d start = roads[i][maxIdx];
-      ezgl::point2d end = roads[i][maxIdx + 1];
-      ezgl::point2d midPoint((start.x + end.x) / 2, (start.y + end.y) / 2);
+        ezgl::point2d start = roads[i][maxIdx];
+        ezgl::point2d end = roads[i][maxIdx + 1];
+        ezgl::point2d midPoint((start.x + end.x) / 2, (start.y + end.y) / 2);
 
-      g->set_font_size(10);
-      g->set_color(ezgl::BLACK);
-      g->draw_text(midPoint, streetName);
+        // Compute the angle for text orientation
+        double angle = atan2(end.y - start.y, end.x - start.x) * 180.0 / M_PI;
 
-      drawnNames.insert(streetName); // Ensure we don't draw the same name multiple times
-   }
+        // Keep the text readable (0 to 180 degrees)
+        if (angle < -90) angle += 180;
+        if (angle > 90) angle -= 180;
+
+        // Set text properties and draw
+        g->set_font_size(10);
+        g->set_color(ezgl::BLACK);
+        g->set_text_rotation(angle);
+        g->draw_text(midPoint, streetName);
+    }
 }
 
 // Load Roads and Convert to ezgl::point2d
@@ -268,6 +270,7 @@ void draw_main_canvas(ezgl::renderer *g)
     {
         drawPOIs(g, zoomLevel);
     }
+    drawStreetNames(g,zoomLevel);
    
 }
 
