@@ -38,9 +38,11 @@
 // function declarations
 void drawFeatures(ezgl::renderer *g, double zoomLevel);
 void drawRoads(ezgl::renderer *g, double zoomLevel);
+void drawPOIs(ezgl::renderer *g, double zoomLevel);
 double x_from_lon(double lon);
 double y_from_lat(double lat);
 void loadHighway();
+void loadPOIs();
 int classify_road(OSMID way_id);
 void calculate_map_bound(double &min_lat, double &max_lat, double &min_lon, double &max_lon);
 void drawStreetSegments(ezgl::renderer *g, int priority);
@@ -66,6 +68,7 @@ ezgl::surface *poi_icon;
 std::vector<ezgl::point2d> POIs;
 std::vector<int> road_types;
 std::vector<bool> oneWayRoad;
+std::vector<std::string> poiNames;
 std::unordered_map<OSMID, std::string> osmHighway;
 
 double avgLat;
@@ -237,13 +240,15 @@ void load_road_data() {
 }
 
 //Load the plane projections of Points of Interest
-void load_poi_data(){
+void loadPOIs(){
     POIs.clear();
     for (int i=0; i<getNumPointsOfInterest(); i++){
         LatLon pos = getPOIPosition(i);
         
         ezgl::point2d projection(x_from_lon(pos.longitude()), y_from_lat(pos.latitude()));
         POIs.push_back(projection);
+        
+        poiNames.push_back(getPOIName(i));
     }
 }
 
@@ -263,7 +268,7 @@ void draw_main_canvas(ezgl::renderer *g)
     {
         drawPOIs(g, zoomLevel);
     }
-
+   
 }
 
 // Set Initial View Using LatLon Bounds
@@ -290,7 +295,7 @@ void drawMap() {
     setInterface(application);
     loadHighway();
     load_road_data();   
-    load_poi_data();
+    loadPOIs();
     application.run(nullptr, nullptr, nullptr, nullptr);
 }
 
@@ -374,6 +379,24 @@ void drawRoads(ezgl::renderer *g, double zoomLevel) {
             g->draw_line(roads[i][j], roads[i][j + 1]);
         }
     }
+}
+
+void drawPOIs(ezgl::renderer *g, double zoomLevel){
+    poi_icon = g->load_png("libstreetmap/resources/point_of_interest.png");
+    int scalingFac = 2000000/g->get_visible_world().area();
+    int iconFac = std::min(scalingFac, 5);
+    for (size_t i=0; i<POIs.size();i++){
+        if (g->get_visible_world().area() < 2000000 && g->get_visible_world().contains(POIs[i])){
+            g->draw_surface(poi_icon,POIs[i], 0.02*iconFac);
+            if (scalingFac>=50){
+                g->set_color(0,0,0);
+                g->set_font_size(10.0);
+                ezgl::point2d textPos (POIs[i].x, POIs[i].y-3500/zoomLevel);
+                g->draw_text(textPos, poiNames[i], 5, 5);
+            }
+        }
+    }
+    g->free_surface(poi_icon);
 }
 
 double getZoomLevel(ezgl::renderer *g, double initial_width) {
