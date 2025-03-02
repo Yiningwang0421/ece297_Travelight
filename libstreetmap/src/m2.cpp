@@ -487,7 +487,7 @@ ezgl::point2d findLargestInscribedRectangle(FeatureIdx feature_id) {
 }
 
 
-
+// was helped by chat gpt
 void pre_load_road_data() {
     highways.clear();
     main_roads.clear();
