@@ -75,6 +75,7 @@ std::unordered_map<OSMID, std::string> osmHighway;
 
 
 double avgLat;
+double fontSize;
 
 // Define the structure *before* using it in load_road_data()
 struct RoadSegment {
@@ -190,16 +191,16 @@ void drawStreetNames(ezgl::renderer *g, double zoomLevel) {
 
     // **Determine which road types to display**
     std::vector<RoadSegment>* roadsToDraw = nullptr;
-    if (zoomLevel >= 1500) roadsToDraw = &minor;
-    else if (zoomLevel >= 460) roadsToDraw = &secondary;
-    else if (zoomLevel >= 280) roadsToDraw = &main_roads;
+    if (zoomLevel >= 15000) roadsToDraw = &minor;
+    else if (zoomLevel >= 4600) roadsToDraw = &secondary;
+    else if (zoomLevel >= 160) roadsToDraw = &main_roads;
     else if (zoomLevel >= 100) roadsToDraw = &highways;
     
     if (!roadsToDraw) return; // No roads should be drawn
 
     for (const RoadSegment &road : *roadsToDraw) {
         // **Draw road name at the precomputed midpoint**
-        g->set_font_size(10);
+        g->set_font_size(8);
         g->set_color(ezgl::BLACK);
         g->set_text_rotation(road.angle); // Rotate text with road direction
         g->draw_text(road.midpoint, road.name);
@@ -257,16 +258,15 @@ void draw_main_canvas(ezgl::renderer *g)
    
    static double initial_width = g->get_visible_world().width();
    double zoomLevel = getZoomLevel(g, initial_width);
-   std::cout << "zoomLevel" << zoomLevel << std::endl;
-
+   fontSize = std::max(6.0, 9.0 * zoomLevel / 300.0);
 
     drawFeatures(g, zoomLevel);
     drawRoads(g, zoomLevel);
-    if (zoomLevel > 230)
+    if (zoomLevel > 260)
     {
         drawPOIs(g, zoomLevel);
     }
-    //drawStreetNames(g,zoomLevel);
+    drawStreetNames(g,zoomLevel);
    
 }
 
@@ -392,7 +392,7 @@ void drawPOIs(ezgl::renderer *g, double zoomLevel){
             g->draw_surface(poi_icon,POIs[i], 0.01*iconFac);
             if (scalingFac>=50){
                 g->set_color(0,0,0);
-                g->set_font_size(10.0);
+                g->set_font_size(fontSize);
                 ezgl::point2d textPos (POIs[i].x, POIs[i].y-3500/zoomLevel);
                 g->draw_text(textPos, poiNames[i], 5, 5);
             }
@@ -408,59 +408,64 @@ double getZoomLevel(ezgl::renderer *g, double initial_width) {
 
 // Function to Draw River Names Along the River's Path
 void drawRiverNames(ezgl::renderer *g, double zoomLevel) {
-    if (zoomLevel < 20) return;
+    if (zoomLevel < 99) return;  // Skip if zoom level is too low
 
     for (FeatureIdx i = 0; i < getNumFeatures(); i++) {
         FeatureType type = getFeatureType(i);
-        if (type != RIVER||type != STREAM) continue;
+        if (type != RIVER && type != STREAM) continue;  // Only process rivers and streams
 
         std::string featureName = getFeatureName(i);
-        if (featureName.empty() || featureName == "<noname>") continue;
+        if (featureName.empty() || featureName == "<noname>") continue;  // Skip unnamed rivers
 
-        std::vector<ezgl::point2d> points;
-        for (int j = 0; j < getNumFeaturePoints(i); j++) {
-            LatLon latlon = getFeaturePoint(i, j);
-            points.push_back(ezgl::point2d(x_from_lon(latlon.longitude()), y_from_lat(latlon.latitude())));
-        }
+        for (int j = 0; j < getNumFeaturePoints(i) - 1; j++) {
+            LatLon p1 = getFeaturePoint(i, j);
+            LatLon p2 = getFeaturePoint(i, j + 1);
 
-        for (size_t j = 0; j < points.size() - 1; j++) {
-            ezgl::point2d mid((points[j].x + points[j + 1].x) / 2, (points[j].y + points[j + 1].y) / 2);
-            double segmentLength = sqrt(pow(points[j + 1].x - points[j].x, 2) + pow(points[j + 1].y - points[j].y, 2));
+            if (((p1.longitude()-p2.longitude())*(p1.longitude()-p2.longitude()) +(p1.latitude()-p2.latitude())*(p1.latitude()-p2.latitude()))<36)
+            {
+                continue;
+            }
+            
 
+            ezgl::point2d point1 = {x_from_lon(p1.longitude()), y_from_lat(p1.latitude())};
+            ezgl::point2d point2 = {x_from_lon(p2.longitude()), y_from_lat(p2.latitude())};
+            
 
-            double angle = atan2(points[j + 1].y - points[j].y, points[j + 1].x - points[j].x) * 180.0 / M_PI;
-            if (angle < 0) angle += 180; 
+            // Calculate midpoint
+            ezgl::point2d mid((point1.x + point2.x) / 2, (point1.y + point2.y) / 2);
+
+            // Compute angle using m1 function
+            double angle = atan2(point2.y - point1.y, point2.x - point1.x) * 180.0 / M_PI; // Ensure you use the correct function
+            if (angle < 0) angle += 180;  // Keep text upright
+
+            // Draw the river name at the midpoint
             g->set_color(ezgl::BLACK);
-            g->set_font_size(10);
+            g->set_font_size(fontSize);
             g->set_text_rotation(angle);
             g->draw_text(mid, featureName);
         }
     }
 }
 
+
 void drawFeatureNames(ezgl::renderer *g, double zoomLevel) {
-    if (zoomLevel < 166) return;
+    if (zoomLevel < 165) return;
 
     for (FeatureIdx i = 0; i < getNumFeatures(); i++) {
         FeatureType type = getFeatureType(i);
-        if (type == ISLAND|| type == RIVER || type == STREAM) continue; 
+        if (type == RIVER || type == STREAM) continue; 
         std::string featureName = getFeatureName(i);
         if (featureName.empty() || featureName == "<noname>") continue;
 
         double featureArea = findFeatureArea(i);
-        if (featureArea < 100) continue;  
+        if (featureArea < (100*zoomLevel/300)) continue;  
 
         ezgl::point2d center = findLargestInscribedRectangle(i);
         g->set_color(ezgl::BLACK);
 
-        int fontsize = 8;
-        if (featureArea > 4000) {
-            fontsize = 10;
-        } else if (featureArea > 1000) {
-            fontsize = 9;
-        }
+    
 
-        g->set_font_size(fontsize);
+        g->set_font_size(fontSize);
         g->draw_text(center, featureName);
     }
 }
@@ -509,10 +514,10 @@ void pre_load_road_data() {
         road.name = getStreetName(seg.streetID);
 
         // **Skip Short Segments Based on Road Type**
-        if (road.roadType == 3 && road.length < 100) continue;
-        if (road.roadType == 2 && road.length < 60) continue;
-        if (road.roadType == 1 && road.length < 40) continue;
-        if (road.roadType == 0 && road.length < 20) continue;
+        if (road.roadType == 3 && road.length < 300) continue;
+        if (road.roadType == 2 && road.length < 150) continue;
+        if (road.roadType == 1 && road.length < 80) continue;
+        if (road.roadType == 0 && road.length < 50) continue;
 
         // **Convert Start & End**
         ezgl::point2d start = {
@@ -541,7 +546,7 @@ void pre_load_road_data() {
         }
 
         road.midpoint = bestMid;
-        road.angle = atan2(road.midpoint.y - start.y, road.midpoint.x - start.x) * 180.0 / M_PI;
+        road.angle = atan2(end.y - start.y, end.x - start.x) * 180.0 / M_PI;
         if (road.angle < 0) road.angle += 180; // Keep text upright
 
         // **Sort into Vectors**
