@@ -51,6 +51,8 @@ std::string splitTextIntoLines(const std::string& text);
 void drawFeatureShapes(ezgl::renderer *g, double zoomLevel);
 void drawFeatureNames(ezgl::renderer *g, double zoomLevel);
 void drawRiverNames(ezgl::renderer *g, double zoomLevel);
+void drawPOIs(ezgl::renderer *g, double zoomLevel);
+
 
 void load_road_data();
 void draw_main_canvas(ezgl::renderer *g);
@@ -161,7 +163,7 @@ void calculate_map_bound(double &min_lat, double &max_lat, double &min_lon, doub
 
 void drawStreetNames(ezgl::renderer *g, double zoomLevel)
 {
-   if (zoomLevel >= 5000)
+   if (zoomLevel >= 200)
    {
       return; // Only draw names when zoomed in
    }
@@ -256,17 +258,12 @@ void draw_main_canvas(ezgl::renderer *g)
 
 
     drawFeatures(g, zoomLevel);
-    drawRoads(g, zoomLevel);    
- 
-    poi_icon = g->load_png("libstreetmap/resources/point_of_interest.png");
-    int scalingFac = 2000000/g->get_visible_world().area();
-    scalingFac = std::min(scalingFac, 5);
-    for (size_t i=0; i<POIs.size();i++){
-        if (g->get_visible_world().area() < 2000000 && g->get_visible_world().contains(POIs[i])){
-            g->draw_surface(poi_icon,POIs[i], 0.03*scalingFac);
-        }
+    drawRoads(g, zoomLevel);
+    if (zoomLevel > 230)
+    {
+        drawPOIs(g, zoomLevel);
     }
-    g->free_surface(poi_icon);
+
 }
 
 // Set Initial View Using LatLon Bounds
@@ -469,3 +466,20 @@ ezgl::point2d findLargestInscribedRectangle(FeatureIdx feature_id) {
     return center;
 }
 
+void drawPOIs(ezgl::renderer *g, double zoomLevel)
+{
+    if (g->get_visible_world().area() > 2000000) return;  // Skip POIs if zoomed out too far
+
+    poi_icon = g->load_png("libstreetmap/resources/point_of_interest.png");
+
+    int scalingFac = 2000000 / g->get_visible_world().area();
+    scalingFac = std::min(scalingFac, 5);  // Limit max scaling factor
+
+    for (size_t i = 0; i < POIs.size(); i++) {
+        if (g->get_visible_world().contains(POIs[i])) {
+            g->draw_surface(poi_icon, POIs[i], 0.01 * scalingFac);
+        }
+    }
+
+    g->free_surface(poi_icon);
+}
