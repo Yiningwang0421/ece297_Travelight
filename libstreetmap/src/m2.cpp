@@ -54,7 +54,7 @@ void drawFeatureShapes(ezgl::renderer *g, double zoomLevel);
 void drawFeatureNames(ezgl::renderer *g, double zoomLevel);
 void drawRiverNames(ezgl::renderer *g, double zoomLevel);
 void drawPOIs(ezgl::renderer *g, double zoomLevel);
-
+void pre_load_road_data();
 
 void load_road_data();
 void draw_main_canvas(ezgl::renderer *g);
@@ -71,9 +71,25 @@ std::vector<bool> oneWayRoad;
 std::vector<std::string> poiNames;
 std::unordered_map<OSMID, std::string> osmHighway;
 
+
+
+
 double avgLat;
 
+// Define the structure *before* using it in load_road_data()
+struct RoadSegment {
+    ezgl::point2d midpoint;  // The best midpoint for text placement
+    double angle;            // Angle for correct text orientation
+    double length;           // Road segment length (used for filtering)
+    int roadType;            // 3 = Highways, 2 = Main Roads, 1 = Secondary Roads, 0 = Minor Roads
+    std::string name;        // Street name
+};
 
+
+std::vector<RoadSegment> highways;   // RoadType 3
+std::vector<RoadSegment> main_roads; // RoadType 2
+std::vector<RoadSegment> secondary;  // RoadType 1
+std::vector<RoadSegment> minor;      // RoadType 0
 
 // Convert Latitude/Longitude to X/Y using Equirectangular Projection
 double x_from_lon(double lon) {
@@ -102,19 +118,24 @@ void loadHighway(){
 //differentiate road type
 int classify_road(OSMID way_id){
    if(osmHighway.find(way_id) == osmHighway.end()){
-      return 1;
+      return 0;
    }
    std::string roadType = osmHighway[way_id];
-   if(roadType == "motorway" || roadType == "trunk" || roadType == "expressway"){
-      return 3;
-   }
-   else if(roadType == "primary" || roadType == "tertiary" ){
-      return 2;
-   }
-   else if(roadType == "secondary"){
-      return 1;
-   }
-   return 0;
+    if (roadType == "motorway" || roadType == "trunk" || roadType == "expressway") {
+        return 3;
+    } else if (roadType == "primary" || roadType == "secondary" || roadType == "tertiary") {
+        return 2;
+    } else if (roadType == "unclassified" || roadType == "residential" || roadType == "living_street") {
+        return 1;
+    } else if (roadType == "service" || roadType == "track" || roadType == "path" || 
+               roadType == "footway" || roadType == "cycleway" || roadType == "bridleway" || 
+               roadType == "steps" || roadType == "pedestrian") {
+        return 0;
+    }else
+    {
+        return 0;
+    }
+    
 }
 
 
@@ -164,53 +185,27 @@ void calculate_map_bound(double &min_lat, double &max_lat, double &min_lon, doub
 //    }
 // }
 
-void drawStreetNames(ezgl::renderer *g, double zoomLevel)
-{
-    if (zoomLevel < 200) return; // Only draw names when zoomed in sufficiently
+void drawStreetNames(ezgl::renderer *g, double zoomLevel) {
+    if (zoomLevel < 100) return;  // Skip rendering at low zoom levels
 
-    for (size_t i = 0; i < roads.size(); i++)
-    {
-        StreetSegmentInfo segInfo = getStreetSegmentInfo(i);
-        std::string streetName = getStreetName(segInfo.streetID);
+    // **Determine which road types to display**
+    std::vector<RoadSegment>* roadsToDraw = nullptr;
+    if (zoomLevel >= 1500) roadsToDraw = &minor;
+    else if (zoomLevel >= 460) roadsToDraw = &secondary;
+    else if (zoomLevel >= 280) roadsToDraw = &main_roads;
+    else if (zoomLevel >= 100) roadsToDraw = &highways;
+    
+    if (!roadsToDraw) return; // No roads should be drawn
 
-        if (streetName.empty() || streetName == "<noname>") continue; // Skip unnamed streets
-
-        // Find the longest segment for text placement
-        size_t maxIdx = 0;
-        double maxLen = 0;
-
-        for (size_t j = 0; j < roads[i].size() - 1; j++)
-        {
-            double length = sqrt(pow(roads[i][j + 1].x - roads[i][j].x, 2) +
-                                 pow(roads[i][j + 1].y - roads[i][j].y, 2));
-            if (length > maxLen)
-            {
-                maxLen = length;
-                maxIdx = j;
-            }
-        }
-
-        // Skip segments that are too short for text placement
-        if (maxLen < 100) continue;
-
-        ezgl::point2d start = roads[i][maxIdx];
-        ezgl::point2d end = roads[i][maxIdx + 1];
-        ezgl::point2d midPoint((start.x + end.x) / 2, (start.y + end.y) / 2);
-
-        // Compute the angle for text orientation
-        double angle = atan2(end.y - start.y, end.x - start.x) * 180.0 / M_PI;
-
-        // Keep the text readable (0 to 180 degrees)
-        if (angle < -90) angle += 180;
-        if (angle > 90) angle -= 180;
-
-        // Set text properties and draw
+    for (const RoadSegment &road : *roadsToDraw) {
+        // **Draw road name at the precomputed midpoint**
         g->set_font_size(10);
         g->set_color(ezgl::BLACK);
-        g->set_text_rotation(angle);
-        g->draw_text(midPoint, streetName);
+        g->set_text_rotation(road.angle); // Rotate text with road direction
+        g->draw_text(road.midpoint, road.name);
     }
 }
+
 
 // Load Roads and Convert to ezgl::point2d
 void load_road_data() {
@@ -262,6 +257,7 @@ void draw_main_canvas(ezgl::renderer *g)
    
    static double initial_width = g->get_visible_world().width();
    double zoomLevel = getZoomLevel(g, initial_width);
+   std::cout << "zoomLevel" << zoomLevel << std::endl;
 
 
     drawFeatures(g, zoomLevel);
@@ -270,7 +266,7 @@ void draw_main_canvas(ezgl::renderer *g)
     {
         drawPOIs(g, zoomLevel);
     }
-    drawStreetNames(g,zoomLevel);
+    //drawStreetNames(g,zoomLevel);
    
 }
 
@@ -299,6 +295,7 @@ void drawMap() {
     loadHighway();
     load_road_data();   
     loadPOIs();
+    pre_load_road_data();
     application.run(nullptr, nullptr, nullptr, nullptr);
 }
 
@@ -338,6 +335,8 @@ void drawFeatureShapes(ezgl::renderer *g, double zoomLevel) {
             g->set_color(119, 221, 119);
         } else if (type == BUILDING) {
             g->set_color(169, 169, 169);
+        } else if (type == GLACIER) {
+            g->set_color(230, 240, 240);
         } else {
             g->set_color(0, 0, 0);
         }
@@ -413,7 +412,7 @@ void drawRiverNames(ezgl::renderer *g, double zoomLevel) {
 
     for (FeatureIdx i = 0; i < getNumFeatures(); i++) {
         FeatureType type = getFeatureType(i);
-        if (type != RIVER) continue;
+        if (type != RIVER||type != STREAM) continue;
 
         std::string featureName = getFeatureName(i);
         if (featureName.empty() || featureName == "<noname>") continue;
@@ -440,11 +439,11 @@ void drawRiverNames(ezgl::renderer *g, double zoomLevel) {
 }
 
 void drawFeatureNames(ezgl::renderer *g, double zoomLevel) {
-    if (zoomLevel < 100) return;
+    if (zoomLevel < 166) return;
 
     for (FeatureIdx i = 0; i < getNumFeatures(); i++) {
         FeatureType type = getFeatureType(i);
-        if (type == ISLAND || type == STREAM) continue; 
+        if (type == ISLAND|| type == RIVER || type == STREAM) continue; 
         std::string featureName = getFeatureName(i);
         if (featureName.empty() || featureName == "<noname>") continue;
 
@@ -468,7 +467,7 @@ void drawFeatureNames(ezgl::renderer *g, double zoomLevel) {
 
 
 
-// Finds the largest inscribed rectangle inside a closed feature
+// Finds the largest inscribed rectangle inside a closed feature (this part is helped by chatgpt)
 ezgl::point2d findLargestInscribedRectangle(FeatureIdx feature_id) {
     int numPoints = getNumFeaturePoints(feature_id);
     if (numPoints < 3) return {0, 0};  // Invalid shape
@@ -493,3 +492,62 @@ ezgl::point2d findLargestInscribedRectangle(FeatureIdx feature_id) {
 }
 
 
+
+void pre_load_road_data() {
+    highways.clear();
+    main_roads.clear();
+    secondary.clear();
+    minor.clear();
+
+    for (int i = 0; i < getNumStreetSegments(); i++) {
+        StreetSegmentInfo seg = getStreetSegmentInfo(i);
+        std::string streetName = getStreetName(seg.streetID);
+        if (streetName.empty() || streetName == "<unkown>") continue;
+        RoadSegment road;
+        road.length = findStreetSegmentLength(i);
+        road.roadType = classify_road(seg.wayOSMID);
+        road.name = getStreetName(seg.streetID);
+
+        // **Skip Short Segments Based on Road Type**
+        if (road.roadType == 3 && road.length < 100) continue;
+        if (road.roadType == 2 && road.length < 60) continue;
+        if (road.roadType == 1 && road.length < 40) continue;
+        if (road.roadType == 0 && road.length < 20) continue;
+
+        // **Convert Start & End**
+        ezgl::point2d start = {
+            x_from_lon(getIntersectionPosition(seg.from).longitude()), 
+            y_from_lat(getIntersectionPosition(seg.from).latitude())
+        };
+
+        ezgl::point2d end = {
+            x_from_lon(getIntersectionPosition(seg.to).longitude()), 
+            y_from_lat(getIntersectionPosition(seg.to).latitude())
+        };
+
+        // **Find Midpoint Directly**
+        ezgl::point2d bestMid = start;
+        double minDiff = DBL_MAX;
+
+        for (int j = 0; j < seg.numCurvePoints; j++) {
+            LatLon curve = getStreetSegmentCurvePoint(i, j);
+            ezgl::point2d curvePoint = {x_from_lon(curve.longitude()), y_from_lat(curve.latitude())};
+
+            double diff = fabs(curvePoint.x - (start.x + end.x) / 2) + fabs(curvePoint.y - (start.y + end.y) / 2);
+            if (diff < minDiff) {
+                minDiff = diff;
+                bestMid = curvePoint;
+            }
+        }
+
+        road.midpoint = bestMid;
+        road.angle = atan2(road.midpoint.y - start.y, road.midpoint.x - start.x) * 180.0 / M_PI;
+        if (road.angle < 0) road.angle += 180; // Keep text upright
+
+        // **Sort into Vectors**
+        if (road.roadType == 3) highways.push_back(road);
+        else if (road.roadType == 2) main_roads.push_back(road);
+        else if (road.roadType == 1) secondary.push_back(road);
+        else minor.push_back(road);
+    }
+}
