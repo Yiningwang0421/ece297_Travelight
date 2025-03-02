@@ -204,7 +204,7 @@
           </packing>
         </child>
         <child>
-          <object class="GtkButton">
+          <object class="GtkButton" id="find_button">
             <property name="label" translatable="yes">Find</property>
             <property name="visible">True</property>
             <property name="can-focus">True</property>
@@ -216,7 +216,7 @@
           </packing>
         </child>
         <child>
-          <object class="GtkSearchEntry">
+          <object class="GtkSearchEntry" id="street_1">
             <property name="visible">True</property>
             <property name="can-focus">True</property>
             <property name="width-chars">30</property>
@@ -232,7 +232,7 @@
           </packing>
         </child>
         <child>
-          <object class="GtkSearchEntry">
+          <object class="GtkSearchEntry" id="street_2">
             <property name="visible">True</property>
             <property name="can-focus">True</property>
             <property name="primary-icon-name">edit-find-symbolic</property>
