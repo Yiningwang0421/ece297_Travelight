@@ -390,7 +390,7 @@ void drawPOIs(ezgl::renderer *g, double zoomLevel){
     int iconFac = std::min(scalingFac, 5);
     for (size_t i=0; i<POIs.size();i++){
         if (g->get_visible_world().area() < 2000000 && g->get_visible_world().contains(POIs[i])){
-            g->draw_surface(poi_icon,POIs[i], 0.02*iconFac);
+            g->draw_surface(poi_icon,POIs[i], 0.01*iconFac);
             if (scalingFac>=50){
                 g->set_color(0,0,0);
                 g->set_font_size(10.0);
@@ -492,20 +492,4 @@ ezgl::point2d findLargestInscribedRectangle(FeatureIdx feature_id) {
     return center;
 }
 
-void drawPOIs(ezgl::renderer *g, double zoomLevel)
-{
-    if (g->get_visible_world().area() > 2000000) return;  // Skip POIs if zoomed out too far
 
-    poi_icon = g->load_png("libstreetmap/resources/point_of_interest.png");
-
-    int scalingFac = 2000000 / g->get_visible_world().area();
-    scalingFac = std::min(scalingFac, 5);  // Limit max scaling factor
-
-    for (size_t i = 0; i < POIs.size(); i++) {
-        if (g->get_visible_world().contains(POIs[i])) {
-            g->draw_surface(poi_icon, POIs[i], 0.01 * scalingFac);
-        }
-    }
-
-    g->free_surface(poi_icon);
-}
