@@ -21,7 +21,6 @@
 #include <iostream>
 #include "m1.h"
 #include "StreetsDatabaseAPI.h"
-
 #include "OSMDatabaseAPI.h"
 #include "math.h"
 #include <vector>
@@ -31,7 +30,7 @@
 #include <string>
 #include <cctype>
 #include <map>
-
+#include <cmath>
 
 
 // loadMap will be called with the name of the file that stores the "layer-2"
@@ -695,3 +694,5 @@ std::vector<int> removeDuplicateElement(std::vector<int> v){
     v.resize(std::distance(v.begin(), ip)); 
     return v;
 }
+
+
