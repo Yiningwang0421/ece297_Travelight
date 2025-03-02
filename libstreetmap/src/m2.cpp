@@ -39,10 +39,12 @@ double y_from_lat(double lat);
 void loadHighway();
 int classify_road(OSMID way_id);
 void calculate_map_bound(double &min_lat, double &max_lat, double &min_lon, double &max_lon);
-void drawStreetSegments(ezgl::renderer *g, int priority);
+//void drawStreetSegments(ezgl::renderer *g, int priority);
 void drawStreetNames(ezgl::renderer *g, double zoomLevel);
+void drawOneWayArrows(ezgl::renderer *g);
 double getZoomLevel(ezgl::renderer *g, double initial_width);
 void load_road_data();
+void load_poi_data();
 void draw_main_canvas(ezgl::renderer *g);
 void setInterface(ezgl::application &application);
 
@@ -53,7 +55,6 @@ ezgl::surface *poi_icon;
 
 std::vector<ezgl::point2d> POIs;
 std::vector<int> road_types;
-std::vector<bool> oneWayRoad;
 std::unordered_map<OSMID, std::string> osmHighway;
 
 double avgLat;
@@ -100,8 +101,6 @@ int classify_road(OSMID way_id){
    return 0;
 }
 
-
-
 // Determine Map Boundaries
 void calculate_map_bound(double &min_lat, double &max_lat, double &min_lon, double &max_lon) {
     min_lat = max_lat = getIntersectionPosition(0).latitude();
@@ -147,57 +146,65 @@ void calculate_map_bound(double &min_lat, double &max_lat, double &min_lon, doub
 //    }
 // }
 
-void drawStreetNames(ezgl::renderer *g, double zoomLevel)
-{
-   if (zoomLevel >= 5000)
-   {
-      return; // Only draw names when zoomed in
-   }
+//one way won't work
+void drawOneWayArrows(ezgl::renderer *g) {
+    double zoomLevel = getZoomLevel(g, g->get_visible_world().width());
 
-   std::unordered_set<std::string> drawnNames;
+    // Only show arrows when zoom level is sufficiently high
+    double minZoomForArrows = 8.0;
+    if (zoomLevel < minZoomForArrows) {
+        return;
+    }
 
-   for (size_t i = 0; i < roads.size(); i++)
-   {
-      StreetSegmentInfo segInfo = getStreetSegmentInfo(i);
-      std::string streetName = getStreetName(segInfo.streetID);
+    double arrowSize = std::max(6.0, zoomLevel * 1.5);  // Scale arrows with zoom level
 
-      if (streetName.empty() || drawnNames.find(streetName) != drawnNames.end())
-      {
-         continue; // Skip if no name or already drawn
-      }
+    for (int segmentID = 0; segmentID < getNumStreetSegments(); segmentID++) {
+        StreetSegmentInfo segmentInfo = getStreetSegmentInfo(segmentID);
+        if (!segmentInfo.oneWay) continue;
 
-      // Find the longest segment for text placement
-      size_t maxIdx = 0;
-      double maxLen = 0;
+        LatLon pointA = getIntersectionPosition(segmentInfo.from);
+        LatLon pointB = getIntersectionPosition(segmentInfo.to);
 
-      for (size_t j = 0; j < roads[i].size() - 1; j++)
-      {
-         double length = sqrt(pow(roads[i][j + 1].x - roads[i][j].x, 2) +
-                              pow(roads[i][j + 1].y - roads[i][j].y, 2));
-         if (length > maxLen)
-         {
-            maxLen = length;
-            maxIdx = j;
-         }
-      }
+        ezgl::point2d start(x_from_lon(pointA.longitude()), y_from_lat(pointA.latitude()));
+        ezgl::point2d end(x_from_lon(pointB.longitude()), y_from_lat(pointB.latitude()));
 
-      ezgl::point2d start = roads[i][maxIdx];
-      ezgl::point2d end = roads[i][maxIdx + 1];
-      ezgl::point2d midPoint((start.x + end.x) / 2, (start.y + end.y) / 2);
+        double dx = end.x - start.x;
+        double dy = end.y - start.y;
+        double length = sqrt(dx * dx + dy * dy);
 
-      g->set_font_size(10);
-      g->set_color(ezgl::BLACK);
-      g->draw_text(midPoint, streetName);
+        // Ensure that at least one arrow appears
+        double arrowSpacing = std::max(20.0, length / 3.0);
+        if (length < arrowSpacing) {
+            continue;  // Skip if road is too short for arrows
+        }
 
-      drawnNames.insert(streetName); // Ensure we don't draw the same name multiple times
-   }
+        double ux = dx / length;
+        double uy = dy / length;
+
+        // Draw multiple arrows along the road
+        for (double j = arrowSpacing / 2; j < length; j += arrowSpacing) {
+            ezgl::point2d mid(start.x + j * ux, start.y + j * uy);
+            ezgl::point2d arrowLeft(mid.x - arrowSize * uy, mid.y + arrowSize * ux);
+            ezgl::point2d arrowRight(mid.x + arrowSize * uy, mid.y - arrowSize * ux);
+            ezgl::point2d arrowTip(mid.x + arrowSize * ux * 2, mid.y + arrowSize * uy * 2);
+
+            g->set_color(ezgl::BLACK);
+            g->set_line_width(2);
+            g->draw_line(mid, arrowTip);  // Main arrow line
+            g->draw_line(arrowTip, arrowLeft);
+            g->draw_line(arrowTip, arrowRight);
+        }
+    }
 }
+
+// extracts the user input on search bar
+void findPressed(Gtk)
+
 
 // Load Roads and Convert to ezgl::point2d
 void load_road_data() {
     roads.clear();
     road_types.clear();
-    oneWayRoad.clear();
 
     for (int i = 0; i < getNumStreetSegments(); i++) {
         StreetSegmentInfo seg = getStreetSegmentInfo(i);
@@ -243,7 +250,8 @@ void draw_main_canvas(ezgl::renderer *g)
    double zoomLevel = getZoomLevel(g, initial_width);
 
     drawFeatures(g, zoomLevel);
-    drawRoads(g, zoomLevel);    
+    drawRoads(g, zoomLevel);
+    drawOneWayArrows(g);  
  
     poi_icon = g->load_png("libstreetmap/resources/point_of_interest.png");
     int scalingFac = 2000000/g->get_visible_world().area();
@@ -346,7 +354,7 @@ void drawRoads(ezgl::renderer *g, double zoomLevel) {
             g->set_line_width(3);
         } else {
             g->set_color(ezgl::WHITE);  // Secondary roads
-            g->set_line_width(1);
+            g->set_line_width(3);
         }
 
         // Draw road as a polyline
