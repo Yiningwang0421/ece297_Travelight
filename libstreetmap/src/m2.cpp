@@ -486,6 +486,9 @@ void draw_main_canvas(ezgl::renderer *g)
    static double initial_width = g->get_visible_world().width();
    zoomLevel = getZoomLevel(g, initial_width);
 
+   fontSize = std::max(7.0, 9.0 * zoomLevel / 300.0);
+
+
     drawFeatures(g, zoomLevel);
     drawRoads(g, zoomLevel);
     drawOneWayArrows(g);
@@ -493,18 +496,6 @@ void draw_main_canvas(ezgl::renderer *g)
     if(!showIntersection.empty()){
         drawIntersect(g);
     }
-
-    poi_icon = g->load_png("libstreetmap/resources/point_of_interest.png");
-    int scalingFac = 2000000/g->get_visible_world().area();
-    scalingFac = std::min(scalingFac, 5);
-    for (size_t i=0; i<POIs.size();i++){
-        if (g->get_visible_world().area() < 2000000 && g->get_visible_world().contains(POIs[i])){
-            g->draw_surface(poi_icon,POIs[i], 0.03*scalingFac);
-        }
-    }
-    g->free_surface(poi_icon);
-
-
     
     if (zoomLevel > 260)
     {
@@ -630,10 +621,10 @@ void drawRoads(ezgl::renderer *g, double zoomLevel) {
             g->set_line_width(3);
         } else if (roadType == 2) {
             g->set_color(150, 150, 150);  // Major roads
-            g->set_line_width(3);
+            g->set_line_width(2);
         } else {
             g->set_color(ezgl::WHITE);  // Secondary roads
-            g->set_line_width(3);
+            g->set_line_width(1);
         }
 
         // Draw road as a polyline
@@ -770,7 +761,7 @@ ezgl::point2d findLargestInscribedRectangle(FeatureIdx feature_id) {
 void drawStreetNames(ezgl::renderer *g) {
     if (zoomLevel < 100) return;  // Skip rendering at low zoom levels
 
-    g->set_font_size(fontSize);
+    g->set_font_size(8);
     g->set_color(ezgl::BLACK);
 
     // **Always draw highways if zoom level is at least 100**
@@ -806,7 +797,7 @@ void drawStreetNames(ezgl::renderer *g) {
     }
 }
 
-void pre_load_road_data() { //helped by chatgpt
+void pre_load_road_data() {
     highways.clear();
     main_roads.clear();
     secondary.clear();
@@ -816,19 +807,11 @@ void pre_load_road_data() { //helped by chatgpt
         const auto& segment_ids = streetSegmentVector[street_id];
         if (segment_ids.empty()) continue;
 
-        // **Step 1: Compute Total Street Length**
-        double total_length = 0.0;
-        for (StreetSegmentIdx seg_id : segment_ids) {
-            total_length += findStreetSegmentLength(seg_id);
-        }
-        if (total_length < 1000) continue;  // Ignore short streets
-
-        // **Step 2: Generate Labels Every 500m**
-        double accumulated_distance = 0.0;
-        ezgl::point2d last_label_position;
-
         for (StreetSegmentIdx seg_id : segment_ids) {
             StreetSegmentInfo seg_info = getStreetSegmentInfo(seg_id);
+            double segment_length = findStreetSegmentLength(seg_id);
+
+            if (segment_length < 100.0) continue;  // **忽略短于 50m 的 segment**
 
             // **Convert LatLon to pixel coordinates**
             ezgl::point2d start = {
@@ -841,33 +824,28 @@ void pre_load_road_data() { //helped by chatgpt
                 y_from_lat(getIntersectionPosition(seg_info.to).latitude())
             };
 
-            // **Step 3: Label Placement Along the Street**
-            double segment_length = findStreetSegmentLength(seg_id);
-            accumulated_distance += segment_length;
+            // **计算标注点位置（取中点）**
+            ezgl::point2d label_pos = {
+                (start.x + end.x) / 2,
+                (start.y + end.y) / 2
+            };
 
-            if (accumulated_distance >= 200.0) {
-                // Compute label position (midpoint of the segment)
-                ezgl::point2d label_pos = {(start.x + end.x) / 2, (start.y + end.y) / 2};
+            // **计算角度**
+            double dx = end.x - start.x;
+            double dy = end.y - start.y;
+            double angle = atan2(dy, dx) * 180.0 / M_PI;
+            if (angle < 0) angle += 180;  // **保持正向**
 
-                // Compute rotation angle
-                double dx = end.x - start.x;
-                double dy = end.y - start.y;
-                double angle = atan2(dy, dx) * 180.0 / M_PI;
-                if (angle < 0) angle += 180;  // Normalize angle
+            // **存储标注**
+            RoadLabel label = {label_pos, angle, getStreetName(street_id)};
 
-                // Store label
-                RoadLabel label = {label_pos, angle, getStreetName(street_id)};
-                
-                // **Step 4: Assign to Correct Road Type**
-                int road_class = classify_road(seg_info.wayOSMID);
-                switch (road_class) {
-                    case 3: highways.push_back(label); break;
-                    case 2: main_roads.push_back(label); break;
-                    case 1: secondary.push_back(label); break;
-                    default: minor.push_back(label); break;
-                }
-
-                accumulated_distance = 0;  // Reset distance counter
+            // **按道路类型分类**
+            int road_class = classify_road(seg_info.wayOSMID);
+            switch (road_class) {
+                case 3: highways.push_back(label); break;
+                case 2: main_roads.push_back(label); break;
+                case 1: secondary.push_back(label); break;
+                default: minor.push_back(label); break;
             }
         }
     }
