@@ -14,7 +14,7 @@
         <property name="visible">True</property>
         <property name="can-focus">False</property>
         <child>
-          <!-- n-columns=3 n-rows=7 -->
+          <!-- n-columns=3 n-rows=8 -->
           <object class="GtkGrid" id="InnerGrid">
             <property name="visible">True</property>
             <property name="can-focus">False</property>
@@ -143,6 +143,19 @@
               </packing>
             </child>
             <child>
+              <object class="GtkButton" id="ToggleStreetNamesButton">
+                <property name="label" translatable="yes">Show Streets</property>
+                <property name="visible">True</property>
+                <property name="can-focus">True</property>
+                <property name="receives-default">True</property>
+              </object>
+              <packing>
+                <property name="left-attach">0</property>
+                <property name="top-attach">7</property>
+                <property name="width">3</property>
+              </packing>
+            </child>
+            <child>
               <placeholder/>
             </child>
             <child>
@@ -160,7 +173,7 @@
           </object>
           <packing>
             <property name="left-attach">1</property>
-            <property name="top-attach">2</property>
+            <property name="top-attach">1</property>
           </packing>
         </child>
         <child>
@@ -226,16 +239,7 @@
           </packing>
         </child>
         <child>
-          <object class="GtkButton" id="ToggleStreetNamesButton">
-            <property name="label" translatable="yes">Street Name</property>
-            <property name="visible">True</property>
-            <property name="can-focus">True</property>
-            <property name="receives-default">True</property>
-          </object>
-          <packing>
-            <property name="left-attach">1</property>
-            <property name="top-attach">1</property>
-          </packing>
+          <placeholder/>
         </child>
         <child>
           <placeholder/>

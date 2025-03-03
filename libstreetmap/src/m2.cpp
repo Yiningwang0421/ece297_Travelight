@@ -29,6 +29,7 @@
 #include <vector>
 #include <iostream>
 #include <unordered_map>
+#include <gtk/gtk.h>
 #include <sstream>  // Required for std::istringstream
 
 
@@ -58,7 +59,6 @@ void drawFeatureNames(ezgl::renderer *g, double zoomLevel);
 void drawRiverNames(ezgl::renderer *g, double zoomLevel);
 void drawPOIs(ezgl::renderer *g, double zoomLevel);
 
-bool showStreetNames = true;  
 
 struct Intersection{
     LatLon pos;
@@ -87,6 +87,7 @@ std::unordered_map<OSMID, std::string> osmHighway;
 
 
 
+bool show_street_names = false;
 
 double zoomLevel;
 double avgLat;
@@ -106,6 +107,15 @@ std::vector<RoadLabel> main_roads; // RoadType 2
 std::vector<RoadLabel> secondary;  // RoadType 1
 std::vector<RoadLabel> minor;      // RoadType 0
 
+void toggle_street_names(GtkWidget *widget, gpointer data) {
+    show_street_names = !show_street_names; // 切换状态
+
+    ezgl::application *app = static_cast<ezgl::application *>(data);
+    if (app) {
+        std::cout << "Toggled street names: " << (show_street_names ? "ON" : "OFF") << std::endl;
+        app->refresh_drawing(); // 重新绘制地图
+    }
+}
 
 // Convert Latitude/Longitude to X/Y using Equirectangular Projection
 double x_from_lon(double lon) {
@@ -269,6 +279,14 @@ void setInterface(ezgl::application &application) {
     );
 
     application.add_canvas("MainCanvas", draw_main_canvas, initial_world);
+    GtkWidget *toggleButton = GTK_WIDGET(application.get_object("ToggleStreetNamesButton"));
+    
+    if (toggleButton) {
+        g_signal_connect(toggleButton, "clicked", G_CALLBACK(toggle_street_names), &application);
+        std::cout << "Street name toggle button connected!" << std::endl;
+    } else {
+        std::cout << "Error: ToggleStreetNamesButton not found in UI!" << std::endl;
+    }
 }
 
 void act_on_mouse_click(ezgl::application* app, GdkEventButton* event, double x, double y){
@@ -508,9 +526,9 @@ ezgl::point2d findLargestInscribedRectangle(FeatureIdx feature_id) {
 }
 
 void drawStreetNames(ezgl::renderer *g) {
-    if (zoomLevel < 100) return;  // Skip rendering at low zoom levels
+    if (!show_street_names || zoomLevel < 165) return;  // Skip rendering at low zoom levels
 
-    g->set_font_size(9);
+    g->set_font_size(8);
     g->set_color(ezgl::BLACK);
 
     // **Always draw highways if zoom level is at least 100**
@@ -558,21 +576,11 @@ void pre_load_road_data() {
         const auto& segment_ids = streetSegmentVector[street_id];
         if (segment_ids.empty()) continue;
 
-        // **Step 1: Compute Total Street Length & Midpoint Target**
-        double total_length = 0.0;
         for (StreetSegmentIdx seg_id : segment_ids) {
-            total_length += findStreetSegmentLength(seg_id);
-        }
-        if (total_length < 1000) continue;  // 忽略短街道
-
-        double target_distance = total_length / 2.0; // **找到整条路的中点**
-        double accumulated_distance = 0.0;
-        bool label_placed = false;
-
-        for (StreetSegmentIdx seg_id : segment_ids) {
-            if (label_placed) break;  // **一条路只放一个标注，跳出循环**
-
             StreetSegmentInfo seg_info = getStreetSegmentInfo(seg_id);
+            double segment_length = findStreetSegmentLength(seg_id);
+
+            if (segment_length < 100.0) continue;  // **忽略短于 50m 的 segment**
 
             // **Convert LatLon to pixel coordinates**
             ezgl::point2d start = {
@@ -585,45 +593,29 @@ void pre_load_road_data() {
                 y_from_lat(getIntersectionPosition(seg_info.to).latitude())
             };
 
-            // **累积距离**
-            double segment_length = findStreetSegmentLength(seg_id);
-            accumulated_distance += segment_length;
+            // **计算标注点位置（取中点）**
+            ezgl::point2d label_pos = {
+                (start.x + end.x) / 2,
+                (start.y + end.y) / 2
+            };
 
-            if (accumulated_distance >= target_distance) {
-                // **计算标注点位置（在当前路段的相应位置）**
-                double remaining_distance = target_distance - (accumulated_distance - segment_length);
-                double ratio = remaining_distance / segment_length;
+            // **计算角度**
+            double dx = end.x - start.x;
+            double dy = end.y - start.y;
+            double angle = atan2(dy, dx) * 180.0 / M_PI;
+            if (angle < 0) angle += 180;  // **保持正向**
 
-                ezgl::point2d label_pos = {
-                    start.x + ratio * (end.x - start.x),
-                    start.y + ratio * (end.y - start.y)
-                };
+            // **存储标注**
+            RoadLabel label = {label_pos, angle, getStreetName(street_id)};
 
-                // **计算角度**
-                double dx = end.x - start.x;
-                double dy = end.y - start.y;
-                double angle = atan2(dy, dx) * 180.0 / M_PI;
-                if (angle < 0) angle += 180;  // **保持正向**
-
-                // **存储标注**
-                RoadLabel label = {label_pos, angle, getStreetName(street_id)};
-
-                // **按道路类型分类**
-                int road_class = classify_road(seg_info.wayOSMID);
-                switch (road_class) {
-                    case 3: highways.push_back(label); break;
-                    case 2: main_roads.push_back(label); break;
-                    case 1: secondary.push_back(label); break;
-                    default: minor.push_back(label); break;
-                }
-
-                label_placed = true;  // **一条路只标记一次**
+            // **按道路类型分类**
+            int road_class = classify_road(seg_info.wayOSMID);
+            switch (road_class) {
+                case 3: highways.push_back(label); break;
+                case 2: main_roads.push_back(label); break;
+                case 1: secondary.push_back(label); break;
+                default: minor.push_back(label); break;
             }
         }
     }
-}
-
-void toggle_street_names(GtkWidget *, ezgl::application *application) {
-    showStreetNames = !showStreetNames;  // 切换状态
-    application->refresh_drawing();      // 重新绘制界面
 }
