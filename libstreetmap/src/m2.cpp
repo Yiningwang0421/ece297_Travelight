@@ -69,6 +69,12 @@ void drawRiverNames(ezgl::renderer *g, double zoomLevel);
 void drawPOIs(ezgl::renderer *g, double zoomLevel);
 void act_on_mouse_click(ezgl::application* app, GdkEventButton* event, double x, double y);
 void showStreetNames(GtkWidget *widget, gpointer data);
+void showBuildings(GtkWidget *widget, gpointer data);
+void showBuildingnames(GtkWidget *widget, gpointer data);
+void showPOIS(GtkWidget *widget, gpointer data);
+void showDirections(GtkWidget *widget, gpointer data);
+
+
 
 struct Intersection{
     LatLon pos;
@@ -106,10 +112,10 @@ double zoomLevel;
 double avgLat;
 double fontSize;
 bool showstreetname = false;
-bool showBuildingname = false;
-bool showBuilding = false;
-bool showPOI = false;
-bool showDirection = false; 
+bool showBuildingname = true;
+bool showBuilding = true;
+bool showPOI = true;
+bool showDirection = true; 
 
 // Define the structure *before* using it in load_road_data()
 struct RoadLabel {
@@ -226,7 +232,7 @@ void calculate_map_bound(double &min_lat, double &max_lat, double &min_lon, doub
 //one way won't work
 void drawOneWayArrows(ezgl::renderer *g) {
     double minZoom = 240.0;
-    if(zoomLevel < minZoom){
+    if(zoomLevel < minZoom || !showDirection){
         return;
     }
     g->set_color(ezgl::BLACK);
@@ -395,6 +401,22 @@ void setUpShow(ezgl::application *app, bool /*unused*/){
     GtkWidget *streetnameButton = GTK_WIDGET(app -> get_object("showName"));
     g_signal_connect(streetnameButton, "clicked", G_CALLBACK(showStreetNames), app);
     std::cout << "detected the showstreetname button" << std::endl;
+
+    GtkWidget *showBuildingButton = GTK_WIDGET(app -> get_object("showbuilding"));
+    g_signal_connect(streetnameButton, "clicked", G_CALLBACK(showBuildings), app);
+    std::cout << "detected the showstreetname button" << std::endl;
+
+    GtkWidget *showBuildingnameButton = GTK_WIDGET(app -> get_object("showbuildingname"));
+    g_signal_connect(streetnameButton, "clicked", G_CALLBACK(showBuildingnames), app);
+    std::cout << "detected the showstreetname button" << std::endl;
+
+    GtkWidget *showDirectionButton = GTK_WIDGET(app -> get_object("showdirection"));
+    g_signal_connect(streetnameButton, "clicked", G_CALLBACK(showDirections), app);
+    std::cout << "detected the showstreetname button" << std::endl;
+
+    GtkWidget *showPOIButton = GTK_WIDGET(app -> get_object("showPOI"));
+    g_signal_connect(streetnameButton, "clicked", G_CALLBACK(showPOIS), app);
+    std::cout << "detected the showstreetname button" << std::endl;
 }
 
 // complete the auto display of related streetnames
@@ -429,8 +451,7 @@ void dropMenu(ezgl::application *app){
         std::cerr << "Error: Could not find search entry widgets" << std::endl;
     }
 }
-
-
+ 
 
 void showStreetNames(GtkWidget *widget, gpointer data){
     // if detected, then we change its status
@@ -439,6 +460,54 @@ void showStreetNames(GtkWidget *widget, gpointer data){
     }
     else{
         showstreetname = false;
+    }
+    ezgl::application *app = static_cast<ezgl::application *>(data);
+    app -> refresh_drawing();
+}
+
+void showBuildingnames(GtkWidget *widget, gpointer data){
+    // if detected, then we change its status
+    if(showBuildingname == false){
+        showBuildingname = true;
+    }
+    else{
+        showBuildingname = false;
+    }
+    ezgl::application *app = static_cast<ezgl::application *>(data);
+    app -> refresh_drawing();
+}
+
+void showBuildings(GtkWidget *widget, gpointer data){
+    // if detected, then we change its status
+    if(showBuilding == false){
+        showBuilding = true;
+    }
+    else{
+        showBuilding = false;
+    }
+    ezgl::application *app = static_cast<ezgl::application *>(data);
+    app -> refresh_drawing();
+}
+
+void showPOIS(GtkWidget *widget, gpointer data){
+    // if detected, then we change its status
+    if(showPOI == false){
+        showPOI = true;
+    }
+    else{
+        showPOI = false;
+    }
+    ezgl::application *app = static_cast<ezgl::application *>(data);
+    app -> refresh_drawing();
+}
+
+void showDirections(GtkWidget *widget, gpointer data){
+    // if detected, then we change its status
+    if(showDirection == false){
+        showDirection = true;
+    }
+    else{
+        showDirection = false;
     }
     ezgl::application *app = static_cast<ezgl::application *>(data);
     app -> refresh_drawing();
@@ -593,6 +662,11 @@ void drawFeatureShapes(ezgl::renderer *g, double zoomLevel) {
 
         // Skip drawing buildings unless zoom > 60
         if (type == BUILDING && zoomLevel < 60) continue;
+        if (type == BUILDING && !showBuilding)
+        {
+            continue;
+        }
+        
 
         std::vector<ezgl::point2d> points;
         for (int j = 0; j < numPoints; j++) {
@@ -658,6 +732,11 @@ void drawRoads(ezgl::renderer *g, double zoomLevel) {
 }
 
 void drawPOIs(ezgl::renderer *g, double zoomLevel){
+    if (!showPOI)
+    {
+        return;
+    }
+    
     poi_icon = g->load_png("libstreetmap/resources/point_of_interest.png");
     int scalingFac = 2000000/g->get_visible_world().area();
     int iconFac = std::min(scalingFac, 5);
@@ -722,13 +801,14 @@ void drawRiverNames(ezgl::renderer *g, double zoomLevel) {
 }
 
 void drawFeatureNames(ezgl::renderer *g, double zoomLevel) {
-    if ( showstreetname||zoomLevel < 100) return;
+    if ( zoomLevel < 100) return;
     
     for (FeatureIdx i = 0; i < getNumFeatures(); i++) {
         FeatureType type = getFeatureType(i);
 
-        if ( showstreetname&&type==BUILDING) return;
-        if (type == ISLAND || type == STREAM) continue; 
+        if (type == ISLAND || type == STREAM) continue;
+         if ( showstreetname && type==BUILDING) continue;
+        if ( !showBuildingname && type==BUILDING) continue; 
         std::string featureName = getFeatureName(i);
         if (featureName.empty() || featureName == "<noname>") continue;
 

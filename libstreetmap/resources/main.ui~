@@ -158,7 +158,7 @@
                   </packing>
                 </child>
                 <child>
-                  <object class="GtkButton">
+                  <object class="GtkButton" id="showName">
                     <property name="label" translatable="yes">StreetName</property>
                     <property name="visible">True</property>
                     <property name="can-focus">True</property>
