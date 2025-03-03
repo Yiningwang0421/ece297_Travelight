@@ -68,6 +68,7 @@ void drawFeatureNames(ezgl::renderer *g, double zoomLevel);
 void drawRiverNames(ezgl::renderer *g, double zoomLevel);
 void drawPOIs(ezgl::renderer *g, double zoomLevel);
 void act_on_mouse_click(ezgl::application* app, GdkEventButton* event, double x, double y);
+void showStreetNames(GtkWidget *widget, gpointer data);
 
 struct Intersection{
     LatLon pos;
@@ -104,6 +105,7 @@ std::unordered_map<OSMID, std::string> osmHighway;
 double zoomLevel;
 double avgLat;
 double fontSize;
+bool showstreetname = false;
 
 // Define the structure *before* using it in load_road_data()
 struct RoadLabel {
@@ -151,7 +153,6 @@ void loadHighway(){
    }
 }
 
-
 //differentiate road type
 int classify_road(OSMID way_id){
    if(osmHighway.find(way_id) == osmHighway.end()){
@@ -171,8 +172,7 @@ int classify_road(OSMID way_id){
     }else
     {
         return 0;
-    }
-    
+    } 
 }
 
 // Determine Map Boundaries
@@ -386,9 +386,10 @@ void setUpShow(ezgl::application *app, bool /*unused*/){
         autoComplete(entry1);
         autoComplete(entry2);
     }
-    else{
-        std::cerr << "Error: could not find searched entry widgets" << std::endl;
-    }
+    
+    GtkWidget *streetnameButton = GTK_WIDGET(app -> get_object("showName"));
+    g_signal_connect(streetnameButton, "clicked", G_CALLBACK(showStreetNames), app);
+    std::cout << "detected the showstreetname button" << std::endl;
 }
 
 // complete the auto display of related streetnames
@@ -422,6 +423,18 @@ void dropMenu(ezgl::application *app){
     else{
         std::cerr << "Error: Could not find search entry widgets" << std::endl;
     }
+}
+
+void showStreetNames(GtkWidget *widget, gpointer data){
+    // if detected, then we change its status
+    if(showstreetname == false){
+        showstreetname = true;
+    }
+    else{
+        showstreetname = false;
+    }
+    ezgl::application *app = static_cast<ezgl::application *>(data);
+    app -> refresh_drawing();
 }
 
 // Load Roads and Convert to ezgl::point2d

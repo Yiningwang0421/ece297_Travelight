@@ -45,31 +45,13 @@
             <property name="margin-right">10</property>
             <property name="orientation">vertical</property>
             <child>
-              <!-- n-columns=3 n-rows=7 -->
+              <!-- n-columns=3 n-rows=8 -->
               <object class="GtkGrid" id="InnerGrid">
                 <property name="visible">True</property>
                 <property name="can-focus">False</property>
                 <property name="margin-right">88</property>
                 <property name="column-spacing">1</property>
                 <property name="baseline-row">1</property>
-                <child>
-                  <object class="GtkButton" id="LeftButton">
-                    <property name="visible">True</property>
-                    <property name="can-focus">False</property>
-                    <property name="receives-default">True</property>
-                    <child>
-                      <object class="GtkArrow" id="LeftArrow">
-                        <property name="visible">True</property>
-                        <property name="can-focus">False</property>
-                        <property name="arrow-type">left</property>
-                      </object>
-                    </child>
-                  </object>
-                  <packing>
-                    <property name="left-attach">0</property>
-                    <property name="top-attach">1</property>
-                  </packing>
-                </child>
                 <child>
                   <object class="GtkButton" id="RightButton">
                     <property name="visible">True</property>
@@ -127,6 +109,19 @@
                   </packing>
                 </child>
                 <child>
+                  <object class="GtkButton" id="ZoomInButton">
+                    <property name="label" translatable="yes">Zoom In</property>
+                    <property name="visible">True</property>
+                    <property name="can-focus">False</property>
+                    <property name="receives-default">True</property>
+                  </object>
+                  <packing>
+                    <property name="left-attach">0</property>
+                    <property name="top-attach">3</property>
+                    <property name="width">3</property>
+                  </packing>
+                </child>
+                <child>
                   <object class="GtkButton" id="DownButton">
                     <property name="visible">True</property>
                     <property name="can-focus">False</property>
@@ -163,16 +158,34 @@
                   </packing>
                 </child>
                 <child>
-                  <object class="GtkButton" id="ZoomInButton">
-                    <property name="label" translatable="yes">Zoom In</property>
+                  <object class="GtkButton">
+                    <property name="label" translatable="yes">StreetName</property>
                     <property name="visible">True</property>
-                    <property name="can-focus">False</property>
+                    <property name="can-focus">True</property>
                     <property name="receives-default">True</property>
                   </object>
                   <packing>
                     <property name="left-attach">0</property>
-                    <property name="top-attach">3</property>
+                    <property name="top-attach">7</property>
                     <property name="width">3</property>
+                  </packing>
+                </child>
+                <child>
+                  <object class="GtkButton" id="LeftButton">
+                    <property name="visible">True</property>
+                    <property name="can-focus">False</property>
+                    <property name="receives-default">True</property>
+                    <child>
+                      <object class="GtkArrow" id="LeftArrow">
+                        <property name="visible">True</property>
+                        <property name="can-focus">False</property>
+                        <property name="arrow-type">left</property>
+                      </object>
+                    </child>
+                  </object>
+                  <packing>
+                    <property name="left-attach">0</property>
+                    <property name="top-attach">1</property>
                   </packing>
                 </child>
                 <child>
@@ -195,19 +208,6 @@
                 <property name="expand">True</property>
                 <property name="fill">True</property>
                 <property name="position">0</property>
-              </packing>
-            </child>
-            <child>
-              <object class="GtkButton" id="ToggleStreetNamesButton">
-                <property name="label" translatable="yes">button</property>
-                <property name="visible">True</property>
-                <property name="can-focus">True</property>
-                <property name="receives-default">True</property>
-              </object>
-              <packing>
-                <property name="expand">False</property>
-                <property name="fill">True</property>
-                <property name="position">1</property>
               </packing>
             </child>
           </object>
