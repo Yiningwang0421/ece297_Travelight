@@ -501,7 +501,7 @@ std::vector<IntersectionIdx> findIntersectionsOfTwoStreets(std::pair<StreetIdx, 
             twoStreetsIntersections.push_back(intersectionVector[street_ids.first][i]);
         }
     }
-      
+
     return removeDuplicateElement(twoStreetsIntersections);
 }
 
