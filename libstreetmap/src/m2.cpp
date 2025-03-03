@@ -314,8 +314,7 @@ std::string getInput(GtkSearchEntry *entry){
 
 void button_clicked(GtkWidget *, gpointer data){
     if (data == nullptr) {
-    std::cerr << "Error: app is null in findButton" << std::endl;
-    return;
+        return;
     }
 
     ezgl::application *app = static_cast<ezgl::application*>(data);
