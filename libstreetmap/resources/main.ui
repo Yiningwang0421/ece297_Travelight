@@ -45,7 +45,7 @@
             <property name="margin-right">10</property>
             <property name="orientation">vertical</property>
             <child>
-              <!-- n-columns=3 n-rows=8 -->
+              <!-- n-columns=3 n-rows=12 -->
               <object class="GtkGrid" id="InnerGrid">
                 <property name="visible">True</property>
                 <property name="can-focus">False</property>
@@ -186,6 +186,58 @@
                   <packing>
                     <property name="left-attach">0</property>
                     <property name="top-attach">1</property>
+                  </packing>
+                </child>
+                <child>
+                  <object class="GtkButton" id="showbuilding">
+                    <property name="label" translatable="yes">Building</property>
+                    <property name="visible">True</property>
+                    <property name="can-focus">True</property>
+                    <property name="receives-default">True</property>
+                  </object>
+                  <packing>
+                    <property name="left-attach">0</property>
+                    <property name="top-attach">8</property>
+                    <property name="width">3</property>
+                  </packing>
+                </child>
+                <child>
+                  <object class="GtkButton" id="showbuildingname">
+                    <property name="label" translatable="yes">Building Name</property>
+                    <property name="visible">True</property>
+                    <property name="can-focus">True</property>
+                    <property name="receives-default">True</property>
+                  </object>
+                  <packing>
+                    <property name="left-attach">0</property>
+                    <property name="top-attach">9</property>
+                    <property name="width">3</property>
+                  </packing>
+                </child>
+                <child>
+                  <object class="GtkButton" id="showdirection">
+                    <property name="label" translatable="yes">Direction</property>
+                    <property name="visible">True</property>
+                    <property name="can-focus">True</property>
+                    <property name="receives-default">True</property>
+                  </object>
+                  <packing>
+                    <property name="left-attach">0</property>
+                    <property name="top-attach">10</property>
+                    <property name="width">3</property>
+                  </packing>
+                </child>
+                <child>
+                  <object class="GtkButton" id="showPOI">
+                    <property name="label" translatable="yes">POI</property>
+                    <property name="visible">True</property>
+                    <property name="can-focus">True</property>
+                    <property name="receives-default">True</property>
+                  </object>
+                  <packing>
+                    <property name="left-attach">0</property>
+                    <property name="top-attach">11</property>
+                    <property name="width">3</property>
                   </packing>
                 </child>
                 <child>
