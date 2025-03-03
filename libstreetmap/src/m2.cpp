@@ -108,6 +108,8 @@ double fontSize;
 bool showstreetname = false;
 bool showBuildingname = false;
 bool showBuilding = false;
+bool showPOI = false;
+bool showDirection = false; 
 
 // Define the structure *before* using it in load_road_data()
 struct RoadLabel {
@@ -223,7 +225,7 @@ void calculate_map_bound(double &min_lat, double &max_lat, double &min_lon, doub
 
 //one way won't work
 void drawOneWayArrows(ezgl::renderer *g) {
-    double minZoom = 10.0;
+    double minZoom = 240.0;
     if(zoomLevel < minZoom){
         return;
     }
@@ -236,7 +238,7 @@ void drawOneWayArrows(ezgl::renderer *g) {
         int typeDisplay = road_types[segmentId];
         double baseArrowSize = 4.0;
         double maxArrowSize = 8.0;
-        double arrowSize = std::max(baseArrowSize, zoomLevel * 0.2);
+        double arrowSize = baseArrowSize * zoomLevel * 0.003 ;
         arrowSize = std::min(arrowSize, maxArrowSize);
 
         // Adjust spacing dynamically
@@ -387,6 +389,8 @@ void setUpShow(ezgl::application *app, bool /*unused*/){
         autoComplete(entry1);
         autoComplete(entry2);
     }
+
+    
     
     GtkWidget *streetnameButton = GTK_WIDGET(app -> get_object("showName"));
     g_signal_connect(streetnameButton, "clicked", G_CALLBACK(showStreetNames), app);
@@ -426,6 +430,8 @@ void dropMenu(ezgl::application *app){
     }
 }
 
+
+
 void showStreetNames(GtkWidget *widget, gpointer data){
     // if detected, then we change its status
     if(showstreetname == false){
@@ -437,6 +443,8 @@ void showStreetNames(GtkWidget *widget, gpointer data){
     ezgl::application *app = static_cast<ezgl::application *>(data);
     app -> refresh_drawing();
 }
+
+
 
 // Load Roads and Convert to ezgl::point2d
 void load_road_data() {
@@ -714,10 +722,12 @@ void drawRiverNames(ezgl::renderer *g, double zoomLevel) {
 }
 
 void drawFeatureNames(ezgl::renderer *g, double zoomLevel) {
-    if (zoomLevel < 100) return;
-
+    if ( showstreetname||zoomLevel < 100) return;
+    
     for (FeatureIdx i = 0; i < getNumFeatures(); i++) {
         FeatureType type = getFeatureType(i);
+
+        if ( showstreetname&&type==BUILDING) return;
         if (type == ISLAND || type == STREAM) continue; 
         std::string featureName = getFeatureName(i);
         if (featureName.empty() || featureName == "<noname>") continue;
@@ -782,7 +792,7 @@ void drawStreetNames(ezgl::renderer *g) {
     }
 
     // **Draw main roads if zoom level is at least 166**
-    if (zoomLevel >= 167) {
+    if (zoomLevel >= 165) {
         for (const RoadLabel &road : main_roads) {
             g->set_text_rotation(road.angle);
             g->draw_text(road.position, road.name);
@@ -816,38 +826,39 @@ void pre_load_road_data() {
         const auto& segment_ids = streetSegmentVector[street_id];
         if (segment_ids.empty()) continue;
 
-        // **Get Street Name and Skip Empty or "unknown" Names**
+        // **Get Street Name and Skip Empty or "<unknown>" Names**
         std::string street_name = getStreetName(street_id);
-        if (street_name.empty() || street_name == <unknown>) {
+        if (street_name.empty() || street_name == "<unknown>") {
             continue;
         }
 
-        // **Step 1: Compute Total Street Length**
+        // **Compute Total Street Length**
         double total_length = 0.0;
         for (StreetSegmentIdx seg_id : segment_ids) {
             total_length += findStreetSegmentLength(seg_id);
         }
 
-        // **Step 2: Classify Road by Length**
+        // **Ignore streets shorter than 200m**
+        if (total_length < 100) continue;
+
+        // **Classify Road by Length**
         int road_class = -1;
-        if (total_length >= 3000) {
+        if (total_length >= 1300) {
             road_class = 3;
-        } else if (total_length >= 2000) {
+        } else if (total_length >= 500) {
             road_class = 2;
-        } else if (total_length >= 1000) {
+        } else if (total_length >= 300) {
             road_class = 1;
-        } else if (total_length >= 100) {
-            road_class = 0;
         } else {
-            continue;  // Ignore very short roads
+            road_class = 0;
         }
 
-        // **Step 3: Label Each Segment**
+        // **Label Every 200m**
+        double accumulated_distance = 0.0;
         for (StreetSegmentIdx seg_id : segment_ids) {
             StreetSegmentInfo seg_info = getStreetSegmentInfo(seg_id);
             double segment_length = findStreetSegmentLength(seg_id);
-            if (segment_length < 150.0) continue;  // Ignore very short segments
-
+            
             // **Convert LatLon to pixel coordinates**
             ezgl::point2d start = {
                 x_from_lon(getIntersectionPosition(seg_info.from).longitude()),
@@ -859,28 +870,36 @@ void pre_load_road_data() {
                 y_from_lat(getIntersectionPosition(seg_info.to).latitude())
             };
 
-            // **Find the Midpoint**
-            ezgl::point2d label_pos = {
-                (start.x + end.x) / 2,
-                (start.y + end.y) / 2
-            };
+            // **Label every 200m**
+            while (accumulated_distance + 100 <= segment_length) {
+                double ratio = (accumulated_distance + 200) / segment_length;
+                ezgl::point2d label_pos = {
+                    start.x + ratio * (end.x - start.x),
+                    start.y + ratio * (end.y - start.y)
+                };
 
-            // **Compute Angle**
-            double dx = end.x - start.x;
-            double dy = end.y - start.y;
-            double angle = atan2(dy, dx) * 180.0 / M_PI;
-            if (angle < 0) angle += 180;  // Keep text upright
+                // **Compute Angle**
+                double dx = end.x - start.x;
+                double dy = end.y - start.y;
+                double angle = atan2(dy, dx) * 180.0 / M_PI;
+                if (angle < 0) angle += 180;  // Keep text upright
 
-            // **Store Label**
-            RoadLabel label = {label_pos, angle, street_name};
+                // **Store Label**
+                RoadLabel label = {label_pos, angle, street_name};
 
-            // **Step 4: Assign to Correct Road Type**
-            switch (road_class) {
-                case 3: highways.push_back(label); break;
-                case 2: main_roads.push_back(label); break;
-                case 1: secondary.push_back(label); break;
-                case 0: minor.push_back(label); break;
+                // **Assign to Correct Road Type**
+                switch (road_class) {
+                    case 3: highways.push_back(label); break;
+                    case 2: main_roads.push_back(label); break;
+                    case 1: secondary.push_back(label); break;
+                    case 0: minor.push_back(label); break;
+                }
+
+                accumulated_distance += 200;
             }
+
+            accumulated_distance -= segment_length;  // Adjust for next segment
+            if (accumulated_distance < 0) accumulated_distance = 0;
         }
     }
 }
