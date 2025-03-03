@@ -512,20 +512,6 @@ void draw_main_canvas(ezgl::renderer *g)
     if(!showIntersection.empty()){
         drawIntersect(g);
     }
-
-    poi_icon = g->load_png("libstreetmap/resources/point_of_interest.png");
-    int scalingFac = 2000000/g->get_visible_world().area();
-    scalingFac = std::min(scalingFac, 5);
-    for (size_t i=0; i<POIs.size();i++){
-        if (g->get_visible_world().area() < 2000000 && g->get_visible_world().contains(POIs[i])){
-            g->draw_surface(poi_icon,POIs[i], 0.03*scalingFac);
-        }
-    }
-    g->free_surface(poi_icon);
-
-
-    
-    
     
     drawRoads(g, zoomLevel);
     drawIntersectionHighlight(g);
@@ -662,10 +648,10 @@ void drawRoads(ezgl::renderer *g, double zoomLevel) {
             g->set_line_width(3);
         } else if (roadType == 2) {
             g->set_color(150, 150, 150);  // Major roads
-            g->set_line_width(3);
+            g->set_line_width(2);
         } else {
             g->set_color(ezgl::WHITE);  // Secondary roads
-            g->set_line_width(3);
+            g->set_line_width(1);
         }
 
         // Draw road as a polyline
