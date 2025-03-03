@@ -341,7 +341,8 @@ std::string getInput(GtkSearchEntry *entry){
 
 void button_clicked(GtkWidget *, gpointer data){
     if (data == nullptr) {
-        return;
+    std::cerr << "Error: app is null in findButton" << std::endl;
+    return;
     }
 
     ezgl::application *app = static_cast<ezgl::application*>(data);
@@ -426,18 +427,23 @@ void setUpShow(ezgl::application *app, bool /*unused*/){
     // Connect toggle buttons
     GtkWidget *streetnameButton = GTK_WIDGET(app -> get_object("showName"));
     g_signal_connect(streetnameButton, "clicked", G_CALLBACK(showStreetNames), app);
+    std::cout << "detected the showstreetname button" << std::endl;
 
     GtkWidget *showBuildingButton = GTK_WIDGET(app -> get_object("showbuilding"));
     g_signal_connect(streetnameButton, "clicked", G_CALLBACK(showBuildings), app);
+    std::cout << "detected the showstreetname button" << std::endl;
 
     GtkWidget *showBuildingnameButton = GTK_WIDGET(app -> get_object("showbuildingname"));
     g_signal_connect(streetnameButton, "clicked", G_CALLBACK(showBuildingnames), app);
+    std::cout << "detected the showstreetname button" << std::endl;
 
     GtkWidget *showDirectionButton = GTK_WIDGET(app -> get_object("showdirection"));
     g_signal_connect(streetnameButton, "clicked", G_CALLBACK(showDirections), app);
+    std::cout << "detected the showstreetname button" << std::endl;
 
     GtkWidget *showPOIButton = GTK_WIDGET(app -> get_object("showPOI"));
     g_signal_connect(streetnameButton, "clicked", G_CALLBACK(showPOIS), app);
+    std::cout << "detected the showstreetname button" << std::endl;
 }
 
 // store street names
@@ -920,6 +926,7 @@ void drawStreetNames(ezgl::renderer *g) {
         for (const RoadLabel &road : highways) {
             g->set_text_rotation(road.angle);
             g->draw_text(road.position, road.name);
+        std::cout << "drawing/n" << std::endl;
         }
     }
 
