@@ -107,7 +107,6 @@ struct RoadLabel {
     ezgl::point2d position;  // Label position (precomputed for rendering)
     double angle;            // Rotation angle for correct text alignment
     std::string name;        // Street name
-    int roadType;            // Road classification (3 = highways, 2 = main roads, etc.)
 };
 
 std::vector<RoadLabel> highways;   // RoadType 3
@@ -497,6 +496,8 @@ void draw_main_canvas(ezgl::renderer *g)
     
     drawRoads(g, zoomLevel);
     drawIntersectionHighlight(g);
+    drawFeatureNames(g, zoomLevel);   
+    drawRiverNames(g, zoomLevel); 
     drawStreetNames(g);
 }
 
@@ -551,8 +552,7 @@ void drawMap() {
 
 void drawFeatures(ezgl::renderer *g, double zoomLevel) {
     drawFeatureShapes(g, zoomLevel);  
-    drawFeatureNames(g, zoomLevel);   
-    drawRiverNames(g, zoomLevel);     
+        
 }
 
 void drawFeatureShapes(ezgl::renderer *g, double zoomLevel) {
@@ -752,21 +752,22 @@ ezgl::point2d findLargestInscribedRectangle(FeatureIdx feature_id) {
 }
 
 void drawStreetNames(ezgl::renderer *g) {
-    if (zoomLevel < 100) return;  // Skip rendering at low zoom levels
+    if ( zoomLevel < 165) return;  // Skip rendering at low zoom levels
 
     g->set_font_size(8);
     g->set_color(ezgl::BLACK);
 
     // **Always draw highways if zoom level is at least 100**
-    if (zoomLevel >= 166) {
+    if (zoomLevel >= 165) {
         for (const RoadLabel &road : highways) {
             g->set_text_rotation(road.angle);
             g->draw_text(road.position, road.name);
+        std::cout << "drawing/n" << std::endl;
         }
     }
 
     // **Draw main roads if zoom level is at least 166**
-    if (zoomLevel >= 166) {
+    if (zoomLevel >= 167) {
         for (const RoadLabel &road : main_roads) {
             g->set_text_rotation(road.angle);
             g->draw_text(road.position, road.name);
@@ -774,7 +775,7 @@ void drawStreetNames(ezgl::renderer *g) {
     }
 
     // **Draw secondary roads if zoom level is at least 25000**
-    if (zoomLevel >= 25000) {
+    if (zoomLevel >= 1500) {
         for (const RoadLabel &road : secondary) {
             g->set_text_rotation(road.angle);
             g->draw_text(road.position, road.name);
@@ -782,7 +783,7 @@ void drawStreetNames(ezgl::renderer *g) {
     }
 
     // **Draw minor roads if zoom level is at least 5000**
-    if (zoomLevel >= 5000) {
+    if (zoomLevel >= 2000) {
         for (const RoadLabel &road : minor) {
             g->set_text_rotation(road.angle);
             g->draw_text(road.position, road.name);
@@ -804,9 +805,10 @@ void pre_load_road_data() {
             StreetSegmentInfo seg_info = getStreetSegmentInfo(seg_id);
             double segment_length = findStreetSegmentLength(seg_id);
 
-            if (segment_length < 100.0) continue;  // **忽略短于 50m 的 segment**
+            // Ignore very short segments
+            if (segment_length < 2.0) continue;
 
-            // **Convert LatLon to pixel coordinates**
+            // Convert LatLon to screen coordinates
             ezgl::point2d start = {
                 x_from_lon(getIntersectionPosition(seg_info.from).longitude()),
                 y_from_lat(getIntersectionPosition(seg_info.from).latitude())
@@ -817,28 +819,34 @@ void pre_load_road_data() {
                 y_from_lat(getIntersectionPosition(seg_info.to).latitude())
             };
 
-            // **计算标注点位置（取中点）**
+            // Find the midpoint of the segment
             ezgl::point2d label_pos = {
                 (start.x + end.x) / 2,
                 (start.y + end.y) / 2
             };
 
-            // **计算角度**
+            // Compute text rotation angle
             double dx = end.x - start.x;
             double dy = end.y - start.y;
             double angle = atan2(dy, dx) * 180.0 / M_PI;
-            if (angle < 0) angle += 180;  // **保持正向**
+            if (angle < 0) angle += 180;  // Keep text upright
 
-            // **存储标注**
-            RoadLabel label = {label_pos, angle, getStreetName(street_id)};
+            // Get street name
+            std::string street_name = getStreetName(street_id);
+            if (street_name.empty() || street_name == "<unknown>") continue;
 
-            // **按道路类型分类**
-            int road_class = classify_road(seg_info.wayOSMID);
-            switch (road_class) {
-                case 3: highways.push_back(label); break;
-                case 2: main_roads.push_back(label); break;
-                case 1: secondary.push_back(label); break;
-                default: minor.push_back(label); break;
+            // Store label
+            RoadLabel label = {label_pos, angle, street_name};
+
+            // **Classify by segment length**
+            if (segment_length >= 300.0) {
+                highways.push_back(label);
+            } else if (segment_length >= 150.0) {
+                main_roads.push_back(label);
+            } else if (segment_length >= 50.0) {
+                secondary.push_back(label);
+            } else {
+                minor.push_back(label);
             }
         }
     }
