@@ -34,7 +34,7 @@
 #include <unordered_set>
 extern std::vector<std::vector<StreetSegmentIdx>> streetSegmentVector; 
 
-// function declarations
+// helper function declarations
 void drawFeatures(ezgl::renderer *g);
 void drawRoads(ezgl::renderer *g);
 void drawPOIs(ezgl::renderer *g);
@@ -51,7 +51,6 @@ int classify_road(OSMID way_id);
 void calculate_map_bound(double &min_lat, double &max_lat, double &min_lon, double &max_lon);
 void drawStreetNames(ezgl::renderer *g);
 double getZoomLevel(ezgl::renderer *g, double initial_width);
-// for showing intersections
 std::string getInput(GtkSearchEntry *entry);
 void button_clicked(GtkWidget *, gpointer data);
 void drawIntersect(ezgl::renderer *g);
@@ -94,43 +93,59 @@ void setInterface(ezgl::application &application);
 void load_street_names();
 
 
-// global variables
-std::vector<std::vector<ezgl::point2d>> roads;  // Store each road as a list of points
-//<a href="https://www.flaticon.com/free-icons/poi" title="poi icons">Poi icons created by Muhammad_Usman - Flaticon</a>
+// Stores road data as a vector of point sequences (each road is represented as a series of points)
+std::vector<std::vector<ezgl::point2d>> roads;  
+
+// Surface for displaying POI icons
 ezgl::surface *poi_icon;
 
+// Stores projected (x, y) coordinates of Points of Interest (POIs)
 std::vector<ezgl::point2d> POIs;
+
+// Stores road classification types (highways, main roads, secondary roads, minor roads)
 std::vector<int> road_types;
 
-// for showing two input intersections
+// Stores intersections found when searching for common points between two streets
 std::vector<IntersectionIdx> showIntersection;
+
+// GTK ListStore for storing street names to be used in the search bar autocomplete feature
 GtkListStore *street_list_store;
 
+// Stores whether each road segment is one-way (true = one-way, false = two-way)
 std::vector<bool> oneWayRoad;
+
+// Stores names of POIs, indexed similarly to the POIs vector
 std::vector<std::string> poiNames;
+
+// Stores all intersections in the map, including their name, location, and highlight status
 std::vector<Intersection> intersections;
+
+// Maps OpenStreetMap (OSM) Way IDs to their corresponding road type (e.g., highway, residential, etc.)
 std::unordered_map<OSMID, std::string> osmHighway;
 
-double zoomLevel;
-double avgLat;
-double fontSize;
-bool showstreetname = false;
-bool showBuildingname = true;
-bool showBuilding = true;
-bool showPOI = true;
-bool showDirection = true; 
+// Global rendering variables
+double zoomLevel;  // Current zoom level of the map
+double avgLat;     // Average latitude of the map, used for coordinate conversions
+double fontSize;   // Font size for text rendering, adjusted dynamically based on zoom level
+
+// Boolean flags for controlling the display of various map elements
+bool showstreetname = false;   // Toggle for displaying street names
+bool showBuildingname = true;  // Toggle for displaying building names
+bool showBuilding = true;      // Toggle for displaying buildings
+bool showPOI = true;           // Toggle for displaying POIs (points of interest)
+bool showDirection = true;     // Toggle for displaying one-way road directions 
 
 // Define the structure *before* using it in load_road_data()
 struct RoadLabel {
-    ezgl::point2d position;  // Label position (precomputed for rendering)
-    double angle;            // Rotation angle for correct text alignment
-    std::string name;        // Street name
+    ezgl::point2d position;  
+    double angle;            
+    std::string name;        
 };
 
-std::vector<RoadLabel> highways;   // RoadType 3
-std::vector<RoadLabel> main_roads; // RoadType 2
-std::vector<RoadLabel> secondary;  // RoadType 1
-std::vector<RoadLabel> minor;      // RoadType 0
+std::vector<RoadLabel> highways;   
+std::vector<RoadLabel> main_roads; 
+std::vector<RoadLabel> secondary;  
+std::vector<RoadLabel> minor;      
 
 // Convert Latitude/Longitude to X/Y using Equirectangular Projection
 double x_from_lon(double lon) {
@@ -203,6 +218,7 @@ void calculate_map_bound(double &min_lat, double &max_lat, double &min_lon, doub
     avgLat = (max_lat + min_lat) / 2.0;
 }
 
+/////Unused function
 //output the road based on the classified osm type
 // void drawStreetSegments(ezgl::renderer *g, int priority){
 //    for(size_t i = 0; i < roads.size(); i++){
@@ -232,7 +248,7 @@ void calculate_map_bound(double &min_lat, double &max_lat, double &min_lon, doub
 //    }
 // }
 
-//one way won't work
+//This Function describes drawing for one way direction
 void drawOneWayArrows(ezgl::renderer *g) {
     double minZoom = 240.0;
     if(zoomLevel < minZoom || !showDirection){
@@ -373,6 +389,8 @@ void button_clicked(GtkWidget *, gpointer data){
     app->refresh_drawing();
 }
 
+
+// function for drawing the intersections of the streets
 void drawIntersect(ezgl::renderer *g){
     g -> set_color(ezgl::BLUE);
     for(IntersectionIdx id: showIntersection){
@@ -382,8 +400,11 @@ void drawIntersect(ezgl::renderer *g){
     }
 }
 
+
 void setUpShow(ezgl::application *app, bool /*unused*/){
     dropMenu(app);
+
+    // Get search entries and find button
     GtkSearchEntry *entry1 = GTK_SEARCH_ENTRY(app -> get_object("street_1"));
     GtkSearchEntry *entry2 = GTK_SEARCH_ENTRY(app -> get_object("street_2"));
     GtkWidget *findButton = GTK_WIDGET(app -> get_object("find_button"));
@@ -403,7 +424,7 @@ void setUpShow(ezgl::application *app, bool /*unused*/){
     }
 
     
-    
+    // Connect toggle buttons
     GtkWidget *streetnameButton = GTK_WIDGET(app -> get_object("showName"));
     g_signal_connect(streetnameButton, "clicked", G_CALLBACK(showStreetNames), app);
     std::cout << "detected the showstreetname button" << std::endl;
@@ -425,7 +446,6 @@ void setUpShow(ezgl::application *app, bool /*unused*/){
     std::cout << "detected the showstreetname button" << std::endl;
 }
 
-// complete the auto display of related streetnames
 // store street names
 void load_street_names(){
     street_list_store = gtk_list_store_new(1, G_TYPE_STRING);
@@ -437,6 +457,7 @@ void load_street_names(){
     }
 }
 
+// complete the auto display of related streetnames
 void autoComplete(GtkSearchEntry *entry){
     GtkEntryCompletion *completion = gtk_entry_completion_new();
     gtk_entry_completion_set_text_column(completion, 0);
@@ -455,7 +476,7 @@ void dropMenu(ezgl::application *app){
     }
 }
  
-
+// function for deciding showing streetnames
 void showStreetNames(GtkWidget *, gpointer data){
     // if detected, then we change its status
     if(showstreetname == false){
@@ -468,6 +489,7 @@ void showStreetNames(GtkWidget *, gpointer data){
     app -> refresh_drawing();
 }
 
+// function for deciding showing building names
 void showBuildingnames(GtkWidget *widget, gpointer data){
     // if detected, then we change its status
     if(showBuildingname == false){
@@ -480,6 +502,7 @@ void showBuildingnames(GtkWidget *widget, gpointer data){
     app -> refresh_drawing();
 }
 
+// function for deciding showing building 
 void showBuildings(GtkWidget *widget, gpointer data){
     // if detected, then we change its status
     if(showBuilding == false){
@@ -492,6 +515,7 @@ void showBuildings(GtkWidget *widget, gpointer data){
     app -> refresh_drawing();
 }
 
+// function for deciding showing building POIs
 void showPOIS(GtkWidget *widget, gpointer data){
     // if detected, then we change its status
     if(showPOI == false){
@@ -504,6 +528,7 @@ void showPOIS(GtkWidget *widget, gpointer data){
     app -> refresh_drawing();
 }
 
+// function for deciding showing directions
 void showDirections(GtkWidget *widget, gpointer data){
     // if detected, then we change its status
     if(showDirection == false){
@@ -561,6 +586,7 @@ void loadPOIs(){
     }
 }
 
+//load the intersections
 void loadIntersections(){
     for(int i=0; i<getNumIntersections(); i++){
         Intersection newInter;
@@ -591,7 +617,7 @@ void drawScale(ezgl::renderer *g) {
     g->draw_text({x_start + scaleLen / 2, y_start - 20}, distNum);
 }
 
-// Draw Roads Based on Classification
+// Draw main canvas
 void draw_main_canvas(ezgl::renderer *g)
 {
    g->set_color(220, 220, 220);
@@ -638,12 +664,15 @@ void setInterface(ezgl::application &application) {
     application.add_canvas("MainCanvas", draw_main_canvas, initial_world);
 }
 
+// function of the reactions of the act on mouse click
 void act_on_mouse_click(ezgl::application* app, GdkEventButton* event, double x, double y){
     LatLon pos = LatLon(lat_from_y(y), lon_from_x(x));
     int inter_id = findClosestIntersection(pos);
     if(findDistanceBetweenTwoPoints(pos, getIntersectionPosition(inter_id)) < 500/zoomLevel){
         if (!intersections[inter_id].highlight){
             intersections[inter_id].highlight = true;
+
+            // Display intersection name in the status message
             std::stringstream ss;
             ss << "Intersection: "<<intersections[inter_id].name;
             app->update_message(ss.str());
@@ -674,10 +703,10 @@ void drawMap() {
 }
 
 void drawFeatures(ezgl::renderer *g) {
-    drawFeatureShapes(g);  
-        
+    drawFeatureShapes(g);          
 }
 
+//Function for drawing the shapes of the features
 void drawFeatureShapes(ezgl::renderer *g) {
     for (FeatureIdx i = 0; i < getNumFeatures(); i++) {
         FeatureType type = getFeatureType(i);
@@ -727,6 +756,7 @@ void drawFeatureShapes(ezgl::renderer *g) {
     }
 }
 
+//function for drawing roads
 void drawRoads(ezgl::renderer *g) {
     for (int i = 0; i < roads.size(); i++) {
         int roadType = road_types[i];
@@ -755,6 +785,7 @@ void drawRoads(ezgl::renderer *g) {
     }
 }
 
+//function for drawing the POIS
 void drawPOIs(ezgl::renderer *g){
     if (!showPOI)
     {
@@ -824,12 +855,14 @@ void drawRiverNames(ezgl::renderer *g) {
     }
 }
 
+//function for drawing the feature names
 void drawFeatureNames(ezgl::renderer *g) {
     if (zoomLevel < 100) return;
 
     for (FeatureIdx i = 0; i < getNumFeatures(); i++) {
         FeatureType type = getFeatureType(i);
 
+        //Conditions for deciding whether drawing the building
         if (type == ISLAND || type == STREAM) continue;
          if ( showstreetname && type==BUILDING) continue;
         if ( !showBuildingname && type==BUILDING) continue; 
@@ -847,6 +880,7 @@ void drawFeatureNames(ezgl::renderer *g) {
     }
 }
 
+//Function for highlighting the intersections
 void drawIntersectionHighlight(ezgl::renderer *g){
     for(int i=0; i<intersections.size(); i++){
         if(intersections[i].highlight && zoomLevel > 5){
@@ -880,6 +914,7 @@ ezgl::point2d findLargestInscribedRectangle(FeatureIdx feature_id) {
     return center;
 }
 
+//function for drawing street names 
 void drawStreetNames(ezgl::renderer *g) {
     if (!showstreetname || zoomLevel < 165) return;  // Skip rendering at low zoom levels
 
@@ -920,6 +955,7 @@ void drawStreetNames(ezgl::renderer *g) {
     }
 }
 
+//function for preprocessing the road data （helped by GPT）
 void pre_load_road_data() {
     highways.clear();
     main_roads.clear();
