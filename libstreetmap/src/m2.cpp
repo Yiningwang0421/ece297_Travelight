@@ -35,9 +35,9 @@
 extern std::vector<std::vector<StreetSegmentIdx>> streetSegmentVector; 
 
 // function declarations
-void drawFeatures(ezgl::renderer *g, double zoomLevel);
-void drawRoads(ezgl::renderer *g, double zoomLevel);
-void drawPOIs(ezgl::renderer *g, double zoomLevel);
+void drawFeatures(ezgl::renderer *g);
+void drawRoads(ezgl::renderer *g);
+void drawPOIs(ezgl::renderer *g);
 void drawIntersectionHighlight(ezgl::renderer *g);
 void drawOneWayArrows(ezgl::renderer *g);
 
@@ -53,7 +53,7 @@ void drawStreetNames(ezgl::renderer *g);
 double getZoomLevel(ezgl::renderer *g, double initial_width);
 // for showing intersections
 std::string getInput(GtkSearchEntry *entry);
-void button_clicked(GtkWidget *widget, gpointer data);
+void button_clicked(GtkWidget *, gpointer data);
 void drawIntersect(ezgl::renderer *g);
 void setUpShow(ezgl::application *app, bool /*unused*/);
 std::vector<IntersectionIdx> findIntersectionsOfTwoStreets2(std::pair<StreetIdx, StreetIdx> street_ids);
@@ -63,12 +63,13 @@ void loadIntersections();
 
 ezgl::point2d findLargestInscribedRectangle(FeatureIdx feature_id);
 std::string splitTextIntoLines(const std::string& text);
-void drawFeatureShapes(ezgl::renderer *g, double zoomLevel);
-void drawFeatureNames(ezgl::renderer *g, double zoomLevel);
-void drawRiverNames(ezgl::renderer *g, double zoomLevel);
-void drawPOIs(ezgl::renderer *g, double zoomLevel);
+void drawFeatureShapes(ezgl::renderer *g);
+void drawFeatureNames(ezgl::renderer *g);
+void drawRiverNames(ezgl::renderer *g);
 void act_on_mouse_click(ezgl::application* app, GdkEventButton* event, double x, double y);
-void showStreetNames(GtkWidget *widget, gpointer data);
+void showStreetNames(GtkWidget *, gpointer data);
+// draw the scale bar
+void drawScale(ezgl::renderer *g);
 
 struct Intersection{
     LatLon pos;
@@ -311,7 +312,7 @@ std::string getInput(GtkSearchEntry *entry){
 // }
 
 
-void button_clicked(GtkWidget *widget, gpointer data){
+void button_clicked(GtkWidget *, gpointer data){
     if (data == nullptr) {
     std::cerr << "Error: app is null in findButton" << std::endl;
     return;
@@ -375,21 +376,28 @@ void setUpShow(ezgl::application *app, bool /*unused*/){
     GtkSearchEntry *entry1 = GTK_SEARCH_ENTRY(app -> get_object("street_1"));
     GtkSearchEntry *entry2 = GTK_SEARCH_ENTRY(app -> get_object("street_2"));
     GtkWidget *findButton = GTK_WIDGET(app -> get_object("find_button"));
-    if(findButton){
-        g_signal_connect(findButton, "clicked", G_CALLBACK(button_clicked), app);
+    if(findButton == nullptr){
+        return;
     }
     else{
-        std::cerr << "Error: findButton not found in UI" << std::endl;
+        g_signal_connect(findButton, "clicked", G_CALLBACK(button_clicked), app);
     }
 
-    if(entry1 && entry2){
+    if(entry1 == nullptr || entry2 == nullptr){
+        return;
+    }
+    else{
         autoComplete(entry1);
         autoComplete(entry2);
     }
     
     GtkWidget *streetnameButton = GTK_WIDGET(app -> get_object("showName"));
-    g_signal_connect(streetnameButton, "clicked", G_CALLBACK(showStreetNames), app);
-    std::cout << "detected the showstreetname button" << std::endl;
+    if(streetnameButton == nullptr){
+        return;
+    }
+    else{
+        g_signal_connect(streetnameButton, "clicked", G_CALLBACK(showStreetNames), app);
+    }
 }
 
 // complete the auto display of related streetnames
@@ -420,12 +428,9 @@ void dropMenu(ezgl::application *app){
         autoComplete(entry1);
         autoComplete(entry2);
     }
-    else{
-        std::cerr << "Error: Could not find search entry widgets" << std::endl;
-    }
 }
 
-void showStreetNames(GtkWidget *widget, gpointer data){
+void showStreetNames(GtkWidget *, gpointer data){
     // if detected, then we change its status
     if(showstreetname == false){
         showstreetname = true;
@@ -490,6 +495,26 @@ void loadIntersections(){
     }
 }
 
+//draw a scale bar
+void drawScale(ezgl::renderer *g) {
+    double screenWidth = g->get_visible_screen().width();
+    double screenHeight = g->get_visible_screen().height();
+    double getWidth = g->get_visible_world().width();
+    double scaleLen = std::max(100.0, std::min(500.0, 100 * (getWidth / 16)));
+    std::string distNum = std::to_string(int(scaleLen)) + "m";
+
+    double x_start = 50;
+    double y_start = screenHeight - 50;
+
+    g->set_color(ezgl::BLACK);
+    g->set_line_width(3);
+    g->draw_line({x_start, y_start}, {x_start + scaleLen, y_start});
+
+    g->set_font_size(30);
+    g->set_color(ezgl::BLACK);
+    g->draw_text({x_start + scaleLen / 2, y_start - 20}, distNum);
+}
+
 // Draw Roads Based on Classification
 void draw_main_canvas(ezgl::renderer *g)
 {
@@ -502,8 +527,8 @@ void draw_main_canvas(ezgl::renderer *g)
    fontSize = std::max(7.0, 9.0 * zoomLevel / 300.0);
 
 
-    drawFeatures(g, zoomLevel);
-    drawRoads(g, zoomLevel);
+    drawFeatures(g);
+    drawRoads(g);
     drawOneWayArrows(g);
 
     if(!showIntersection.empty()){
@@ -512,12 +537,13 @@ void draw_main_canvas(ezgl::renderer *g)
     
     if (zoomLevel > 260)
     {
-        drawPOIs(g, zoomLevel);
+        drawPOIs(g);
     }
     
-    drawRoads(g, zoomLevel);
+    drawRoads(g);
     drawIntersectionHighlight(g);
     drawStreetNames(g);
+    drawScale(g);
 }
 
 // Set Initial View Using LatLon Bounds
@@ -569,13 +595,13 @@ void drawMap() {
     application.run(setUpShow, act_on_mouse_click, nullptr, nullptr);
 }
 
-void drawFeatures(ezgl::renderer *g, double zoomLevel) {
-    drawFeatureShapes(g, zoomLevel);  
-    drawFeatureNames(g, zoomLevel);   
-    drawRiverNames(g, zoomLevel);     
+void drawFeatures(ezgl::renderer *g) {
+    drawFeatureShapes(g);  
+    drawFeatureNames(g);   
+    drawRiverNames(g);     
 }
 
-void drawFeatureShapes(ezgl::renderer *g, double zoomLevel) {
+void drawFeatureShapes(ezgl::renderer *g) {
     for (FeatureIdx i = 0; i < getNumFeatures(); i++) {
         FeatureType type = getFeatureType(i);
         int numPoints = getNumFeaturePoints(i);
@@ -619,7 +645,7 @@ void drawFeatureShapes(ezgl::renderer *g, double zoomLevel) {
     }
 }
 
-void drawRoads(ezgl::renderer *g, double zoomLevel) {
+void drawRoads(ezgl::renderer *g) {
     for (int i = 0; i < roads.size(); i++) {
         int roadType = road_types[i];
 
@@ -647,7 +673,7 @@ void drawRoads(ezgl::renderer *g, double zoomLevel) {
     }
 }
 
-void drawPOIs(ezgl::renderer *g, double zoomLevel){
+void drawPOIs(ezgl::renderer *g){
     poi_icon = g->load_png("libstreetmap/resources/point_of_interest.png");
     int scalingFac = 2000000/g->get_visible_world().area();
     int iconFac = std::min(scalingFac, 5);
@@ -671,7 +697,7 @@ double getZoomLevel(ezgl::renderer *g, double initial_width) {
 }
 
 // Function to Draw River Names Along the River's Path
-void drawRiverNames(ezgl::renderer *g, double zoomLevel) {
+void drawRiverNames(ezgl::renderer *g) {
     if (zoomLevel < 99) return;  // Skip if zoom level is too low
 
     for (FeatureIdx i = 0; i < getNumFeatures(); i++) {
@@ -711,7 +737,7 @@ void drawRiverNames(ezgl::renderer *g, double zoomLevel) {
     }
 }
 
-void drawFeatureNames(ezgl::renderer *g, double zoomLevel) {
+void drawFeatureNames(ezgl::renderer *g) {
     if (zoomLevel < 100) return;
 
     for (FeatureIdx i = 0; i < getNumFeatures(); i++) {
