@@ -501,7 +501,7 @@ void draw_main_canvas(ezgl::renderer *g)
    static double initial_width = g->get_visible_world().width();
    zoomLevel = getZoomLevel(g, initial_width);
 
-   fontSize = std::max(6.0, 9.0 * zoomLevel / 300.0);
+   fontSize = std::max(7.0, 10.0 * zoomLevel / 300.0);
 
 
     drawStreetNames(g);
@@ -512,7 +512,7 @@ void draw_main_canvas(ezgl::renderer *g)
     if(!showIntersection.empty()){
         drawIntersect(g);
     }
-    
+
     drawRoads(g, zoomLevel);
     drawIntersectionHighlight(g);
    if (zoomLevel > 260)
