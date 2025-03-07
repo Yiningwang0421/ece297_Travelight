@@ -98,7 +98,10 @@ void load_street_names();
 std::vector<std::vector<ezgl::point2d>> roads;  
 
 // Surface for displaying POI icons
-ezgl::surface *poi_icon;
+ezgl::surface *poi_icon; 
+ezgl::surface *rest_icon;
+ezgl::surface *hosp_icon;
+ezgl::surface *bike_icon;
 
 // Stores projected (x, y) coordinates of Points of Interest (POIs)
 std::vector<ezgl::point2d> POIs;
@@ -647,6 +650,7 @@ void loadPOIs(){
         POIs.push_back(projection);
         
         poiNames.push_back(getPOIName(i));
+        std::cout<<getPOIType(i)<<std::endl;
     }
 }
 
@@ -856,12 +860,33 @@ void drawPOIs(ezgl::renderer *g){
         return;
     }
     
+    //<a href="https://www.flaticon.com/free-icons/poi" title="poi icons">Poi icons created by Muhammad_Usman - Flaticon</a>
     poi_icon = g->load_png("libstreetmap/resources/point_of_interest.png");
+    
+    //<a href="https://www.flaticon.com/free-icons/restaurant" title="restaurant icons">Restaurant icons created by Freepik - Flaticon</a>
+    rest_icon = g->load_png("libstreetmap/resources/cutlery.png");
+    
+    //<a href="https://www.flaticon.com/free-icons/hospital" title="hospital icons">Hospital icons created by Freepik - Flaticon</a>
+    hosp_icon = g->load_png("libstreetmap/resources/hospital.png");
+    
+    //<a href="https://www.flaticon.com/free-icons/rental" title="rental icons">Rental icons created by surang - Flaticon</a>
+    bike_icon = g->load_png("libstreetmap/resources/bicycle_rent.png");
     int scalingFac = 2000000/g->get_visible_world().area();
     int iconFac = std::min(scalingFac, 5);
     for (size_t i=0; i<POIs.size();i++){
         if (g->get_visible_world().area() < 2000000 && g->get_visible_world().contains(POIs[i])){
-            g->draw_surface(poi_icon,POIs[i], 0.01*iconFac);
+            if (getPOIType(i) == "restaurant" || getPOIType(i) == "fast_food"){
+                g->draw_surface(rest_icon,POIs[i], 0.01*iconFac);
+            }
+            else if (getPOIType(i) == "clinic" || getPOIType(i) == "doctors" || getPOIType(i) == "hospital"){
+                g->draw_surface(hosp_icon,POIs[i], 0.01*iconFac);
+            }
+            else if (getPOIType(i) == "bicycle_rental"){
+                g->draw_surface(bike_icon,POIs[i], 0.03*iconFac);
+            }
+            else{
+                g->draw_surface(poi_icon,POIs[i], 0.01*iconFac);
+            }
             if (scalingFac>=50){
                 g->set_color(0,0,0);
                 g->set_font_size(10.0);
