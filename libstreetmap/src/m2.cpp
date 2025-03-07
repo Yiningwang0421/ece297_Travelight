@@ -21,12 +21,11 @@
 
 #include "m1.h"
 #include "m2.h"
-#include "StreetsDatabaseAPI.h"
+#include "m3.h"
 #include "OSMDatabaseAPI.h"
 #include <ezgl/application.hpp>
 #include <ezgl/graphics.hpp>
 #include <ezgl/rectangle.hpp>
-#include <vector>
 #include <iostream>
 #include <unordered_map>
 #include <sstream>  // Required for std::istringstream
@@ -60,6 +59,8 @@ void autoComplete(GtkSearchEntry *entry);
 void dropMenu(ezgl::application *app);
 void loadIntersections();
 void switchMap(GtkComboBoxText* self, ezgl::application* app);
+void nightMode(ezgl::application *app, bool);
+gboolean night_switch(GtkSwitch * /*NightSwitch*/, gboolean switch_state, ezgl::application *app);
 
 ezgl::point2d findLargestInscribedRectangle(FeatureIdx feature_id);
 std::string splitTextIntoLines(const std::string& text);
@@ -73,6 +74,7 @@ void showBuildings(GtkWidget *widget, gpointer data);
 void showBuildingnames(GtkWidget *widget, gpointer data);
 void showPOIS(GtkWidget *widget, gpointer data);
 void showDirections(GtkWidget *widget, gpointer data);
+
 
 
 
@@ -141,6 +143,8 @@ bool showBuildingname = true;  // Toggle for displaying building names
 bool showBuilding = true;      // Toggle for displaying buildings
 bool showPOI = true;           // Toggle for displaying POIs (points of interest)
 bool showDirection = true;     // Toggle for displaying one-way road directions 
+
+bool nightmode = false;
 
 // Define the structure *before* using it in load_road_data()
 struct RoadLabel {
@@ -510,6 +514,20 @@ void switchMap(GtkComboBoxText* self, ezgl::application* app){
     }
 }
 
+void nightMode(ezgl::application *app, bool){
+    GObject *nightSwitch = app -> get_object("NightMode");
+    g_signal_connect(nightSwitch, "state-set", G_CALLBACK(nightSwitch), app);
+
+}
+
+
+gboolean night_switch(GtkSwitch * /*NightSwitch*/, gboolean switch_state, ezgl::application *app){
+    nightmode = switch_state;
+    std::cout << "switch detected" << std::endl;
+    app -> refresh_drawing();
+    return false;
+}
+
 // store street names
 void load_street_names(){
     street_list_store = gtk_list_store_new(1, G_TYPE_STRING);
@@ -718,13 +736,11 @@ void draw_main_canvas(ezgl::renderer *g)
 void setInterface(ezgl::application &application) {
     load_street_names();
     dropMenu(&application);
+    nightMode(&application, nightmode);
     double min_lat, max_lat, min_lon, max_lon;
     calculate_map_bound(min_lat, max_lat, min_lon, max_lon);
 
-    ezgl::rectangle initial_world(
-        {x_from_lon(min_lon), y_from_lat(min_lat)},
-        {x_from_lon(max_lon), y_from_lat(max_lat)}
-    );
+    ezgl::rectangle initial_world({x_from_lon(min_lon), y_from_lat(min_lat)}, {x_from_lon(max_lon), y_from_lat(max_lat)});
     application.add_canvas("MainCanvas", draw_main_canvas, initial_world);
 }
 
