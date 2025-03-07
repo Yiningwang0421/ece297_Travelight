@@ -376,7 +376,7 @@ void button_clicked(GtkWidget *, gpointer data){
     }
 
     if(showIntersection.empty()){ //start loading the intersections
-        std::cout << "Intersection found" << std::endl;
+        std::cout << "Intersection not found" << std::endl;
         std::string intersectionList;
         for (IntersectionIdx id : showIntersection)
         {
@@ -384,6 +384,7 @@ void button_clicked(GtkWidget *, gpointer data){
         }
         GtkWidget *dialog = gtk_message_dialog_new(GTK_WINDOW(gtk_widget_get_toplevel(GTK_WIDGET(app->get_object("MainWindow")))), GTK_DIALOG_MODAL, GTK_MESSAGE_INFO,
                                                    GTK_BUTTONS_CLOSE, "Found %lu intersections:\n%s", showIntersection.size(), intersectionList.c_str());
+        gtk_window_set_title(GTK_WINDOW(dialog), "No Response");
         gtk_dialog_run(GTK_DIALOG(dialog));
         gtk_widget_destroy(dialog);
     }
