@@ -979,15 +979,15 @@ void pre_load_road_data() {
         }
 
         // **Ignore streets shorter than 200m**
-        if (total_length < 100) continue;
+        if (total_length < 200) continue;
 
         // **Classify Road by Length**
         int road_class = -1;
         if (total_length >= 1300) {
             road_class = 3;
-        } else if (total_length >= 500) {
+        } else if (total_length >= 800) {
             road_class = 2;
-        } else if (total_length >= 300) {
+        } else if (total_length >= 400) {
             road_class = 1;
         } else {
             road_class = 0;
@@ -1035,7 +1035,7 @@ void pre_load_road_data() {
                     case 0: minor.push_back(label); break;
                 }
 
-                accumulated_distance += 200;
+                accumulated_distance += 300;
             }
 
             accumulated_distance -= segment_length;  // Adjust for next segment
