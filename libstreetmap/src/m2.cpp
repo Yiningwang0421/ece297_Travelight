@@ -21,12 +21,11 @@
 
 #include "m1.h"
 #include "m2.h"
-#include "StreetsDatabaseAPI.h"
+#include "m3.h"
 #include "OSMDatabaseAPI.h"
 #include <ezgl/application.hpp>
 #include <ezgl/graphics.hpp>
 #include <ezgl/rectangle.hpp>
-#include <vector>
 #include <iostream>
 #include <unordered_map>
 #include <sstream>  // Required for std::istringstream
@@ -59,6 +58,9 @@ std::vector<IntersectionIdx> findIntersectionsOfTwoStreets2(std::pair<StreetIdx,
 void autoComplete(GtkSearchEntry *entry);
 void dropMenu(ezgl::application *app);
 void loadIntersections();
+void switchMap(GtkComboBoxText* self, ezgl::application* app);
+void nightMode(ezgl::application *app, bool /*Window*/);
+gboolean night_switch(GtkSwitch *widget, gboolean switch_state, ezgl::application *app);
 
 ezgl::point2d findLargestInscribedRectangle(FeatureIdx feature_id);
 std::string splitTextIntoLines(const std::string& text);
@@ -72,8 +74,6 @@ void showBuildings(GtkWidget *widget, gpointer data);
 void showBuildingnames(GtkWidget *widget, gpointer data);
 void showPOIS(GtkWidget *widget, gpointer data);
 void showDirections(GtkWidget *widget, gpointer data);
-
-
 
 // draw the scale bar
 void drawScale(ezgl::renderer *g);
@@ -97,7 +97,10 @@ void load_street_names();
 std::vector<std::vector<ezgl::point2d>> roads;  
 
 // Surface for displaying POI icons
-ezgl::surface *poi_icon;
+ezgl::surface *poi_icon; 
+ezgl::surface *rest_icon;
+ezgl::surface *hosp_icon;
+ezgl::surface *bike_icon;
 
 // Stores projected (x, y) coordinates of Points of Interest (POIs)
 std::vector<ezgl::point2d> POIs;
@@ -120,6 +123,12 @@ std::vector<std::string> poiNames;
 // Stores all intersections in the map, including their name, location, and highlight status
 std::vector<Intersection> intersections;
 
+//Store all map names
+std::vector<std::string> mapOptions = {"Select Map:", "Beijing, China","Beirut, Lebanon", "Berlin, Germany", "Boston, USA", 
+    "Cape Town, South Africa", "Golden Horseshoe, Canada", "Hamilton, Canada", "Hong Kong, China",
+    "Iceland", "Interlaken, Switzerland", "London, England", "New Delhi, India", "New York, USA", "Rio de Janeiro, Brazil", 
+    "Saint Helena", "Singapore", "Tehran, Iran", "Tokyo, Japan", "Toronto, Canada"};
+
 // Maps OpenStreetMap (OSM) Way IDs to their corresponding road type (e.g., highway, residential, etc.)
 std::unordered_map<OSMID, std::string> osmHighway;
 
@@ -134,6 +143,8 @@ bool showBuildingname = true;  // Toggle for displaying building names
 bool showBuilding = true;      // Toggle for displaying buildings
 bool showPOI = true;           // Toggle for displaying POIs (points of interest)
 bool showDirection = true;     // Toggle for displaying one-way road directions 
+
+bool nightmode = false;
 
 // Define the structure *before* using it in load_road_data()
 struct RoadLabel {
@@ -199,7 +210,7 @@ int classify_road(OSMID way_id){
     }else
     {
         return 0;
-    } 
+    }
 }
 
 // Determine Map Boundaries
@@ -254,7 +265,12 @@ void drawOneWayArrows(ezgl::renderer *g) {
     if(zoomLevel < minZoom || !showDirection){
         return;
     }
-    g->set_color(ezgl::BLACK);
+    if(nightmode == true){
+        g->set_color(ezgl::WHITE);
+    }
+    else{
+        g->set_color(ezgl::BLACK);
+    }
     g->set_line_width(2);
 
     for(size_t segmentId = 0; segmentId < roads.size(); segmentId++){
@@ -352,14 +368,17 @@ void button_clicked(GtkWidget *, gpointer data){
     //convert name to street id
     std::vector<StreetIdx> street1ID = findStreetIdsFromPartialStreetName(street1);
     std::vector<StreetIdx> street2ID = findStreetIdsFromPartialStreetName(street2);
-    std::cout << "Street 1: " << street1 << " -> IDs found: " << street1ID.size() << std::endl;
-    std::cout << "Street 2: " << street2 << " -> IDs found: " << street2ID.size() << std::endl;
     if(street1ID.empty() || street2ID.empty()){
-        std::cout << "Can't find street name for your typed input" << std::endl;
+        GtkWidget *dialog = gtk_message_dialog_new(GTK_WINDOW(gtk_widget_get_toplevel(GTK_WIDGET(app->get_object("MainWindow"))))
+        , GTK_DIALOG_DESTROY_WITH_PARENT, GTK_MESSAGE_INFO, GTK_BUTTONS_CLOSE, "Street does not exist!", "title");
+        gtk_window_set_title(GTK_WINDOW(dialog), "ERROR");
+        gtk_dialog_run(GTK_DIALOG(dialog));
+        gtk_widget_destroy(dialog);
         app->refresh_drawing();
         return;
     }
     
+    // clear out the current intersection data
     showIntersection.clear();
     for(StreetIdx s1: street1ID){
         for(StreetIdx s2: street2ID){
@@ -369,14 +388,15 @@ void button_clicked(GtkWidget *, gpointer data){
     }
 
     if(showIntersection.empty()){ //start loading the intersections
-        std::cout << "Intersection found" << std::endl;
+        std::cout << "Intersection not found" << std::endl;
         std::string intersectionList;
         for (IntersectionIdx id : showIntersection)
         {
-            intersectionList += getIntersectionName(id) + "\n";
+            intersectionList += getIntersectionName(id) + "\n"; // add to a review list for no intersection street prepared for later search
         }
         GtkWidget *dialog = gtk_message_dialog_new(GTK_WINDOW(gtk_widget_get_toplevel(GTK_WIDGET(app->get_object("MainWindow")))), GTK_DIALOG_MODAL, GTK_MESSAGE_INFO,
                                                    GTK_BUTTONS_CLOSE, "Found %lu intersections:\n%s", showIntersection.size(), intersectionList.c_str());
+        gtk_window_set_title(GTK_WINDOW(dialog), "No Response");
         gtk_dialog_run(GTK_DIALOG(dialog));
         gtk_widget_destroy(dialog);
     }
@@ -384,8 +404,15 @@ void button_clicked(GtkWidget *, gpointer data){
         std::cout << "Intersection found" << std::endl;
         for(IntersectionIdx id: showIntersection){
             std::cout << "Intersection id is: " << id << ", streets are: " << getIntersectionName(id) << std::endl;
-        }
+        }   
     }
+
+    // auto-centering the GIS systems
+    IntersectionIdx intersectID = showIntersection[0];
+    LatLon intersectPos = getIntersectionPosition(intersectID);
+    ezgl::point2d convertPt(x_from_lon(intersectPos.longitude()), y_from_lat(intersectPos.latitude()));
+    ezgl::rectangle newCenterWorld({convertPt.x - 500, convertPt.y - 500}, {convertPt.x + 500, convertPt.y + 500});
+    app->change_canvas_world_coordinates("MainCanvas", newCenterWorld);
     app->refresh_drawing();
 }
 
@@ -403,6 +430,7 @@ void drawIntersect(ezgl::renderer *g){
 
 void setUpShow(ezgl::application *app, bool /*unused*/){
     dropMenu(app);
+    nightMode(app, nightmode);
 
     // Get search entries and find button
     GtkSearchEntry *entry1 = GTK_SEARCH_ENTRY(app -> get_object("street_1"));
@@ -444,7 +472,75 @@ void setUpShow(ezgl::application *app, bool /*unused*/){
     GtkWidget *showPOIButton = GTK_WIDGET(app -> get_object("showPOI"));
     g_signal_connect(streetnameButton, "clicked", G_CALLBACK(showPOIS), app);
     std::cout << "detected the showstreetname button" << std::endl;
+    
+    app->create_combo_box_text("Select Map", 0, switchMap, mapOptions);
 }
+
+//Allows for switching of maps
+void switchMap(GtkComboBoxText* self, ezgl::application* app){
+    std::string mapAddress = "/cad2/ece297s/public/maps/";
+    std::string cityName = "";
+    int option = gtk_combo_box_get_active(GTK_COMBO_BOX(self));
+    
+    //Get the city name
+    if(option > 0){
+        for(int i=0; i<mapOptions[option].length(); i++){
+            if(mapOptions[option][i] == ' ' && mapOptions[option][i-1] == ','){
+                cityName.append("_");
+            }
+            else if(mapOptions[option][i] == ' ' && mapOptions[option][i-1] != ','){
+                cityName.append("-");
+            }
+            else if (mapOptions[option][i] != ','){
+                cityName.append(1, static_cast<char>(std::tolower(mapOptions[option][i])));
+            }
+        }
+        mapAddress.append(cityName);
+        mapAddress.append(".streets.bin");
+        closeMap();
+        
+        //Draw the new map
+        bool load_success = loadMap(mapAddress);
+        if(!load_success) {
+            std::cerr << "Failed to load map '" << mapAddress << "'\n";
+            return;
+        }
+        std::cout << "Successfully loaded map '" << mapAddress << "'\n";
+        load_street_names();  
+        dropMenu(app);
+        double min_lat, max_lat, min_lon, max_lon;
+        calculate_map_bound(min_lat, max_lat, min_lon, max_lon);
+
+        ezgl::rectangle initial_world(
+            {x_from_lon(min_lon), y_from_lat(min_lat)},
+            {x_from_lon(max_lon), y_from_lat(max_lat)}
+        );
+        
+        app->change_canvas_world_coordinates("MainCanvas",initial_world);
+        ezgl::renderer *g = app->get_renderer();
+        g->set_visible_world(initial_world); 
+        pre_load_road_data();
+        loadHighway();
+        load_road_data();
+        loadPOIs();
+        loadIntersections();
+        double initial_width = g->get_visible_world().width();
+        zoomLevel = getZoomLevel(g, initial_width);
+        app->refresh_drawing();
+    }
+}
+
+void nightMode(ezgl::application *app, bool /*Windowapp*/){
+    GObject *nightSwitch = app -> get_object("NightMode");
+    g_signal_connect(nightSwitch, "state-set", G_CALLBACK(night_switch), app);
+}
+
+gboolean night_switch(GtkSwitch *widget, gboolean switch_state, ezgl::application *app){
+    nightmode = switch_state;
+    app -> refresh_drawing();
+    return false;
+}
+
 
 // store street names
 void load_street_names(){
@@ -583,6 +679,7 @@ void loadPOIs(){
         POIs.push_back(projection);
         
         poiNames.push_back(getPOIName(i));
+        std::cout<<getPOIType(i)<<std::endl;
     }
 }
 
@@ -620,7 +717,12 @@ void drawScale(ezgl::renderer *g) {
 // Draw main canvas
 void draw_main_canvas(ezgl::renderer *g)
 {
-   g->set_color(220, 220, 220);
+    if(nightmode == true){
+        g->set_color(17, 20, 24);
+    }
+    else{
+        g->set_color(220, 220, 220);
+    }
    g->fill_rectangle(g->get_visible_world());
    
    static double initial_width = g->get_visible_world().width();
@@ -657,10 +759,7 @@ void setInterface(ezgl::application &application) {
     double min_lat, max_lat, min_lon, max_lon;
     calculate_map_bound(min_lat, max_lat, min_lon, max_lon);
 
-    ezgl::rectangle initial_world(
-        {x_from_lon(min_lon), y_from_lat(min_lat)},
-        {x_from_lon(max_lon), y_from_lat(max_lat)}
-    );
+    ezgl::rectangle initial_world({x_from_lon(min_lon), y_from_lat(min_lat)}, {x_from_lon(max_lon), y_from_lat(max_lat)});
     application.add_canvas("MainCanvas", draw_main_canvas, initial_world);
 }
 
@@ -728,20 +827,39 @@ void drawFeatureShapes(ezgl::renderer *g) {
         }
 
         // Feature Colors
-        if (type == PARK || type == GREENSPACE) {
-            g->set_color(181, 220, 159);
-        } else if (type == LAKE || type == RIVER || type == STREAM) {
-            g->set_color(173, 216, 230);
-        } else if (type == BEACH) {
-            g->set_color(238, 214, 175);
-        } else if (type == ISLAND) {
-            g->set_color(205, 183, 158);
-        } else if (type == GOLFCOURSE) {
-            g->set_color(119, 221, 119);
-        } else if (type == BUILDING) {
-            g->set_color(169, 169, 169);
-        } else {
-            g->set_color(0, 0, 0);
+        if(nightmode == true){
+            if (type == PARK || type == GREENSPACE) {
+                g->set_color(20, 61, 39);
+            } else if (type == LAKE || type == RIVER || type == STREAM) {
+                g->set_color(24, 34, 45);
+            } else if (type == BEACH) {
+                g->set_color(238, 214, 175);
+            } else if (type == ISLAND) {
+                g->set_color(29, 37, 44);
+            } else if (type == GOLFCOURSE) {
+                g->set_color(43, 53, 61);
+            } else if (type == BUILDING) {
+                g->set_color(80, 80, 80);
+            } else {
+                g->set_color(30, 30, 30);
+            }
+        }
+        else{
+            if (type == PARK || type == GREENSPACE) {
+                g->set_color(181, 220, 159);
+            } else if (type == LAKE || type == RIVER || type == STREAM) {
+                g->set_color(173, 216, 230);
+            } else if (type == BEACH) {
+                g->set_color(238, 214, 175);
+            } else if (type == ISLAND) {
+                g->set_color(205, 183, 158);
+            } else if (type == GOLFCOURSE) {
+                g->set_color(119, 221, 119);
+            } else if (type == BUILDING) {
+                g->set_color(169, 169, 169);
+            } else {
+                g->set_color(0, 0, 0);
+            }
         }
 
         // Draw feature shape
@@ -767,15 +885,29 @@ void drawRoads(ezgl::renderer *g) {
         if (zoomLevel < 30 && roadType == 0) continue;  // Hide main roads
         
         // Set road color & width
-        if (roadType == 3) {
-            g->set_color(255, 140, 0);  // Highways
-            g->set_line_width(3);
-        } else if (roadType == 2) {
-            g->set_color(150, 150, 150);  // Major roads
-            g->set_line_width(2);
-        } else {
-            g->set_color(ezgl::WHITE);  // Secondary roads
-            g->set_line_width(1);
+        if(nightmode == false){
+            if (roadType == 3) {
+                g->set_color(255, 140, 0);  // Highways
+                g->set_line_width(3);
+            } else if (roadType == 2) {
+                g->set_color(150, 150, 150);  // Major roads
+                g->set_line_width(2);
+            } else {
+                g->set_color(ezgl::WHITE);  // Secondary roads
+                g->set_line_width(1);
+            }
+        }
+        else{
+            if (roadType == 3) {
+                g->set_color(82, 113, 152);  // Highways
+                g->set_line_width(3);
+            } else if (roadType == 2) {
+                g->set_color(56, 79, 102);  // Major roads
+                g->set_line_width(2);
+            } else {
+                g->set_color(30, 40, 51);  // Secondary roads
+                g->set_line_width(1);
+            }
         }
 
         // Draw road as a polyline
@@ -792,12 +924,33 @@ void drawPOIs(ezgl::renderer *g){
         return;
     }
     
+    //<a href="https://www.flaticon.com/free-icons/poi" title="poi icons">Poi icons created by Muhammad_Usman - Flaticon</a>
     poi_icon = g->load_png("libstreetmap/resources/point_of_interest.png");
+    
+    //<a href="https://www.flaticon.com/free-icons/restaurant" title="restaurant icons">Restaurant icons created by Freepik - Flaticon</a>
+    rest_icon = g->load_png("libstreetmap/resources/cutlery.png");
+    
+    //<a href="https://www.flaticon.com/free-icons/hospital" title="hospital icons">Hospital icons created by Freepik - Flaticon</a>
+    hosp_icon = g->load_png("libstreetmap/resources/hospital.png");
+    
+    //<a href="https://www.flaticon.com/free-icons/rental" title="rental icons">Rental icons created by surang - Flaticon</a>
+    bike_icon = g->load_png("libstreetmap/resources/bicycle_rent.png");
     int scalingFac = 2000000/g->get_visible_world().area();
     int iconFac = std::min(scalingFac, 5);
     for (size_t i=0; i<POIs.size();i++){
         if (g->get_visible_world().area() < 2000000 && g->get_visible_world().contains(POIs[i])){
-            g->draw_surface(poi_icon,POIs[i], 0.01*iconFac);
+            if (getPOIType(i) == "restaurant" || getPOIType(i) == "fast_food"){
+                g->draw_surface(rest_icon,POIs[i], 0.01*iconFac);
+            }
+            else if (getPOIType(i) == "clinic" || getPOIType(i) == "doctors" || getPOIType(i) == "hospital"){
+                g->draw_surface(hosp_icon,POIs[i], 0.01*iconFac);
+            }
+            else if (getPOIType(i) == "bicycle_rental"){
+                g->draw_surface(bike_icon,POIs[i], 0.03*iconFac);
+            }
+            else{
+                g->draw_surface(poi_icon,POIs[i], 0.01*iconFac);
+            }
             if (scalingFac>=50){
                 g->set_color(0,0,0);
                 g->set_font_size(10.0);
@@ -847,7 +1000,12 @@ void drawRiverNames(ezgl::renderer *g) {
             if (angle < 0) angle += 180;  // Keep text upright
 
             // Draw the river name at the midpoint
-            g->set_color(ezgl::BLACK);
+            if(nightmode == true){
+                g->set_color(ezgl::WHITE);
+            }
+            else{
+                g->set_color(ezgl::BLACK);
+            }
             g->set_font_size(fontSize);
             g->set_text_rotation(angle);
             g->draw_text(mid, featureName);
@@ -873,8 +1031,12 @@ void drawFeatureNames(ezgl::renderer *g) {
         if (featureArea < 100) continue;  
 
         ezgl::point2d center = findLargestInscribedRectangle(i);
-        g->set_color(ezgl::BLACK);
-
+        if(nightmode == true){
+            g->set_color(ezgl::WHITE);
+        }
+        else{
+            g->set_color(ezgl::BLACK);
+        }
         g->set_font_size(fontSize);
         g->draw_text(center, featureName);
     }
@@ -919,14 +1081,18 @@ void drawStreetNames(ezgl::renderer *g) {
     if (!showstreetname || zoomLevel < 165) return;  // Skip rendering at low zoom levels
 
     g->set_font_size(fontSize);
-    g->set_color(ezgl::BLACK);
+    if(nightmode == true){
+        g->set_color(ezgl::WHITE);
+    }
+    else{
+        g->set_color(ezgl::BLACK);
+    }
 
     // **Always draw highways if zoom level is at least 100**
     if (zoomLevel >= 165) {
         for (const RoadLabel &road : highways) {
             g->set_text_rotation(road.angle);
             g->draw_text(road.position, road.name);
-        std::cout << "drawing/n" << std::endl;
         }
     }
 
