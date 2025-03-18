@@ -107,6 +107,7 @@ ezgl::surface *poi_icon;
 ezgl::surface *rest_icon;
 ezgl::surface *hosp_icon;
 ezgl::surface *bike_icon;
+ezgl::surface *atm_icon;
 
 // Stores projected (x, y) coordinates of Points of Interest (POIs)
 std::vector<ezgl::point2d> POIs;
@@ -1051,6 +1052,9 @@ void drawPOIs(ezgl::renderer *g){
     
     //<a href="https://www.flaticon.com/free-icons/rental" title="rental icons">Rental icons created by surang - Flaticon</a>
     bike_icon = g->load_png("libstreetmap/resources/bicycle_rent.png");
+    
+    //<a href="https://www.flaticon.com/free-icons/atm-machine" title="atm machine icons">Atm machine icons created by Acellalelo - Flaticon</a>
+    atm_icon = g->load_png("libstreetmap/resources/atm_machine.png");
     int scalingFac = 2000000/g->get_visible_world().area();
     int iconFac = std::min(scalingFac, 5);
     for (size_t i=0; i<POIs.size();i++){
@@ -1064,13 +1068,16 @@ void drawPOIs(ezgl::renderer *g){
             else if (getPOIType(i) == "bicycle_rental"){
                 g->draw_surface(bike_icon,POIs[i], 0.03*iconFac);
             }
+            else if (getPOIType(i) == "atm"){
+                g->draw_surface(atm_icon,POIs[i], 0.05*iconFac);
+            }
             else{
                 g->draw_surface(poi_icon,POIs[i], 0.01*iconFac);
             }
             if (scalingFac>=50){
                 g->set_color(0,0,0);
                 g->set_font_size(10.0);
-                ezgl::point2d textPos (POIs[i].x, POIs[i].y-3500/zoomLevel);
+                ezgl::point2d textPos (POIs[i].x, POIs[i].y-3000/zoomLevel);
                 g->draw_text(textPos, poiNames[i], 5, 5);
             }
         }
