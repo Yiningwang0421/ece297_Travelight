@@ -10,8 +10,12 @@
 // (e.g. going from Bloor Street West to Bloor Street East) we have a turn.
 double computePathTravelTime(const double turn_penalty, const std::vector<StreetSegmentIdx>& path){
     double travel_time = 0;
+    
+    //Add the travel time for each street segment
     for(int i=0; i<path.size(); i++){
         travel_time = travel_time + findStreetSegmentTravelTime(path[i]);
+        
+        //Detect turns and apply turn penalties
         if (i > 0 && getStreetSegmentInfo(path[i]).streetID != getStreetSegmentInfo(path[i-1]).streetID){
             travel_time = travel_time + turn_penalty;
         }
