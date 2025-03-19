@@ -1,5 +1,31 @@
+#include <list>
+
 #include "m1.h"
 #include "m3.h"
+
+struct WaveElem {
+    IntersectionIdx node_ID;
+    StreetSegmentIdx edge_ID;
+    double travel_time;
+    double predicted_add_on;
+    
+    WaveElem(int n, int e, float time, float a){
+        node_ID = n;
+        edge_ID = e;
+        travel_time = time;
+        predicted_add_on = a;
+    }
+};
+
+struct Node {
+    IntersectionIdx id;
+    StreetSegmentIdx leaving_edge;
+    StreetSegmentIdx reaching_edge;
+    double bestTime;
+};
+
+bool searchPath(const double turn_penalty, IntersectionIdx srcID, IntersectionIdx destID);
+std::vector<StreetSegmentIdx> pathTraceBack(IntersectionIdx destID);
 
 // Returns the time required to travel along the path specified, in seconds.
 // The path is given as a vector of street segment ids, and this function can
@@ -9,7 +35,18 @@
 // no turn, then there is no penalty. Note that whenever the street id changes
 // (e.g. going from Bloor Street West to Bloor Street East) we have a turn.
 double computePathTravelTime(const double turn_penalty, const std::vector<StreetSegmentIdx>& path){
-   
+    double travel_time = 0;
+    
+    //Add the travel time for each street segment
+    for(int i=0; i<path.size(); i++){
+        travel_time = travel_time + findStreetSegmentTravelTime(path[i]);
+        
+        //Detect turns and apply turn penalties
+        if (i > 0 && getStreetSegmentInfo(path[i]).streetID != getStreetSegmentInfo(path[i-1]).streetID){
+            travel_time = travel_time + turn_penalty;
+        }
+    }
+    return travel_time;
 }
 
 
@@ -23,4 +60,20 @@ double computePathTravelTime(const double turn_penalty, const std::vector<Street
 // of street segment ids; traversing these street segments, in the returned
 // order, would take one from the start to the destination intersection.
 std::vector<StreetSegmentIdx> findPathBetweenIntersections(const double turn_penalty, const std::pair<IntersectionIdx, IntersectionIdx> intersect_ids){
+    std::vector<StreetSegmentIdx> path;
+    if (searchPath(turn_penalty, intersect_ids.first, intersect_ids.second)){
+        path = pathTraceBack(intersect_ids.second);
+    }
+    return path;
+}
+
+bool searchPath(const double turn_penalty, IntersectionIdx srcID, IntersectionIdx destID){
+    return true;
+}
+
+std::vector<StreetSegmentIdx> pathTraceBack(IntersectionIdx destID){
+    std::list<StreetSegmentIdx> path;
+    int currentNodeID = destID;
+    std::vector<StreetSegmentIdx> path_vec(path.begin(), path.end());
+    return path_vec;
 }
