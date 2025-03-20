@@ -834,7 +834,6 @@ void loadPOIs(){
         POIs.push_back(projection);
         
         poiNames.push_back(getPOIName(i));
-        std::cout<<getPOIType(i)<<std::endl;
     }
 }
 

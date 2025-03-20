@@ -18,20 +18,8 @@
  * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
  * SOFTWARE.
  */
-#include <iostream>
 #include "m1.h"
-#include "StreetsDatabaseAPI.h"
-#include "OSMDatabaseAPI.h"
-#include "math.h"
-#include <vector>
-#include <unordered_set>
-#include <utility>
-#include <unordered_map>
-#include <string>
-#include <cctype>
-#include <map>
-#include <cmath>
-
+#include "global.h"
 
 // loadMap will be called with the name of the file that stores the "layer-2"
 // map data accessed through StreetsDatabaseAPI: the street and intersection
@@ -564,7 +552,8 @@ void preprocessStreetSegments(){
     intersectionVector.resize(numStreets);
     int numSegments = getNumStreetSegments();
     segmentData.resize(numSegments);
-
+    
+    max_speed = 0;
     segmentLatLon.resize(numSegments);
 
     // Initialize street bounding box values to extreme placeholders
@@ -607,6 +596,9 @@ void preprocessStreetSegments(){
             streetLat[streetId].second = std::max(streetLat[streetId].second, curvePoint.latitude());
             streetLon[streetId].first = std::min(streetLon[streetId].first, curvePoint.longitude());
             streetLon[streetId].second = std::max(streetLon[streetId].second, curvePoint.longitude());
+        }
+        if (segmentInfo.speedLimit > max_speed){
+            max_speed = segmentInfo.speedLimit;
         }
     }
 }
