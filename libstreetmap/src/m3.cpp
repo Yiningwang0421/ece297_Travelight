@@ -1,7 +1,7 @@
-#include <list>
-
+#include "global.h"
 #include "m1.h"
 #include "m3.h"
+#define NO_EDGE -1
 
 struct WaveElem {
     IntersectionIdx node_ID;
@@ -18,14 +18,23 @@ struct WaveElem {
 };
 
 struct Node {
-    IntersectionIdx id;
-    StreetSegmentIdx leaving_edge;
     StreetSegmentIdx reaching_edge;
-    double bestTime;
+    double best_time;
 };
+
+struct compareTime {
+    bool operator()(const WaveElem& a, const WaveElem& b) const{
+        return (a.travel_time+a.predicted_add_on) > (b.travel_time+b.predicted_add_on);
+    }
+};
+
+//std::vector<Node> nodes;
+//std::vector<std::vector<IntersectionIdx>> adjacent_street_segments;
+std::vector<Node> nodes;
 
 bool searchPath(const double turn_penalty, IntersectionIdx srcID, IntersectionIdx destID);
 std::vector<StreetSegmentIdx> pathTraceBack(IntersectionIdx destID);
+IntersectionIdx findOtherEnd(StreetSegmentIdx ss, IntersectionIdx one_end);
 
 // Returns the time required to travel along the path specified, in seconds.
 // The path is given as a vector of street segment ids, and this function can
@@ -67,13 +76,75 @@ std::vector<StreetSegmentIdx> findPathBetweenIntersections(const double turn_pen
     return path;
 }
 
-bool searchPath(const double turn_penalty, IntersectionIdx srcID, IntersectionIdx destID){
-    return true;
+bool searchPath(const double turn_penalty, IntersectionIdx srcID, IntersectionIdx destID){ 
+    bool pathFound = false;
+    nodes.resize(getNumIntersections());
+    for(int i=0; i<getNumIntersections();i++){
+        nodes[i].reaching_edge = 0;
+        nodes[i].best_time = std::numeric_limits<double>::max();
+    }
+    
+    LatLon dest_pos = intersection_positions[destID];
+    std::priority_queue<WaveElem, std::vector<WaveElem>, compareTime> wavefront;
+    wavefront.push(WaveElem(srcID,NO_EDGE,0,findDistanceBetweenTwoPoints(intersection_positions[srcID],dest_pos)/max_speed)); 
+    while(wavefront.size() > 0){
+        WaveElem wave = wavefront.top();
+        wavefront.pop();
+        int curr_ID = wave.node_ID;
+        
+        if(wave.travel_time < nodes[curr_ID].best_time){
+            nodes[curr_ID].reaching_edge = wave.edge_ID;
+            nodes[curr_ID].best_time = wave.travel_time;
+            
+            if (curr_ID == destID){
+                pathFound = true;
+                break;
+            }
+            StreetIdx rea_edge_street = 0;
+            if (nodes[curr_ID].reaching_edge != NO_EDGE){
+                rea_edge_street = getStreetSegmentInfo(nodes[curr_ID].reaching_edge).streetID;
+            }
+            for(int i=0; i<outgoingInfo[curr_ID].size(); i++){
+                //std::cout<<adjacent_street_segments[curr_ID].size()<<std::endl;
+               
+                    StreetSegmentIdx out_edge = outgoingInfo[curr_ID][i].second;
+                    StreetSegmentIdx rea_edge = nodes[curr_ID].reaching_edge;
+                    if(out_edge == rea_edge){
+                        continue;
+                    }
+                    else{
+                        IntersectionIdx to_node_id = outgoingInfo[curr_ID][i].first;
+                        double penalty = 0;
+                        if (rea_edge != NO_EDGE){
+                            if (getStreetSegmentInfo(out_edge).streetID != rea_edge_street){
+                                penalty = turn_penalty;
+                            }
+                        }
+                        wavefront.emplace(WaveElem(to_node_id,out_edge,nodes[curr_ID].best_time+segment_travel_time[out_edge]+penalty,
+                            findDistanceBetweenTwoPoints(intersection_positions[to_node_id],dest_pos)/max_speed)); 
+                    }  
+            }
+        }
+    }
+    return pathFound;
 }
 
 std::vector<StreetSegmentIdx> pathTraceBack(IntersectionIdx destID){
     std::list<StreetSegmentIdx> path;
-    int currentNodeID = destID;
-    std::vector<StreetSegmentIdx> path_vec(path.begin(), path.end());
-    return path_vec;
+    IntersectionIdx current_node_id = destID;
+    StreetSegmentIdx prev_edge = nodes[destID].reaching_edge;
+    
+    while(prev_edge != NO_EDGE){
+        path.push_front(prev_edge);
+        if(getStreetSegmentInfo(prev_edge).to == current_node_id){
+            current_node_id = getStreetSegmentInfo(prev_edge).from;
+        }
+        else{
+            current_node_id = getStreetSegmentInfo(prev_edge).to;
+        }
+        prev_edge = nodes[current_node_id].reaching_edge;
+    }
+    nodes.clear();
+    return std::vector<StreetSegmentIdx>(path.begin(),path.end());
 }
+

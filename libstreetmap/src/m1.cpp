@@ -60,6 +60,10 @@ int getWayIndexFromOSMID(OSMID way_id);//get the correponding index from the nod
 //global variables for function usage
 std::vector<std::vector<StreetSegmentIdx>> intersection_street_segments;
 std::vector<std::vector<IntersectionIdx>> adjacent_street_segments;
+std::vector<std::vector<std::pair<IntersectionIdx, StreetSegmentIdx>>> outgoingInfo;
+std::vector<LatLon> intersection_positions;
+std::vector<double> segment_travel_time;
+double max_speed;
 
 std::unordered_map<OSMID, std::unordered_map<std::string, std::string>> OSMvec;
 bool loadMap(std::string map_streets_database_filename) {
@@ -83,6 +87,7 @@ bool loadMap(std::string map_streets_database_filename) {
 
     intersection_street_segments.resize(getNumIntersections());
     adjacent_street_segments.resize(getNumIntersections());
+    outgoingInfo.resize(getNumIntersections());
 
     for (IntersectionIdx intersection_id = 0; intersection_id < getNumIntersections(); intersection_id++)
     {
@@ -110,9 +115,13 @@ bool loadMap(std::string map_streets_database_filename) {
             }
             if (adjacent != 0 && uniqueAdjSegment == true)
             {
-                adjacent_street_segments[intersection_id].push_back(adjacent);
+                if (ss_info.to != ss_info.from){
+                    adjacent_street_segments[intersection_id].push_back(adjacent);
+                }
+                outgoingInfo[intersection_id].push_back(std::pair(adjacent, ss_id));
             }
         }
+        intersection_positions.push_back(getIntersectionPosition(intersection_id));
     }
     
     //OSM storing the value from the map into the osm nodes with the tag pair of the key and value
@@ -429,8 +438,7 @@ POIIdx findClosestPOI(LatLon my_position, std::string poi_type)
 // Corner case: cul-de-sacs can connect an intersection to itself (from and to
 // intersection on street segment are the same). In that case include the
 // intersection in the returned vector (no special handling needed)
-std::vector<IntersectionIdx> findAdjacentIntersections(IntersectionIdx intersection_id)
-{
+std::vector<IntersectionIdx> findAdjacentIntersections(IntersectionIdx intersection_id){
     return adjacent_street_segments[intersection_id];
 }
 
@@ -574,6 +582,7 @@ void preprocessStreetSegments(){
         // Compute and store segment length and speed limit
         double segmentLength = findStreetSegmentLength(segmentId);
         segmentData[segmentId] = {segmentLength, segmentInfo.speedLimit};
+        segment_travel_time.push_back(segmentLength/segmentInfo.speedLimit);
 
         // Store segment start and end positions
         LatLon fromPos = getIntersectionPosition(segmentInfo.from);
