@@ -28,8 +28,11 @@
 #include <queue>
 #include <list>
 
-extern double max_speed = 0;
 
+extern double max_speed;
+extern std::vector<std::vector<std::pair<IntersectionIdx, StreetSegmentIdx>>> outgoingInfo;
+extern std::vector<LatLon> intersection_positions;
+extern std::vector<double> segment_travel_time;
 
 #endif /* GLOBAL_H */
 
