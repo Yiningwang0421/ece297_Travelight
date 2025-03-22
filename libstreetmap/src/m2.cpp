@@ -1108,7 +1108,7 @@ void drawPOIs(ezgl::renderer *g){
     bike_icon = g->load_png("libstreetmap/resources/bicycle_rent.png");
     
     //<a href="https://www.flaticon.com/free-icons/atm-machine" title="atm machine icons">Atm machine icons created by Acellalelo - Flaticon</a>
-    atm_icon = g->load_png("libstreetmap/resources/atm_machine.png");
+    atm_icon = g->load_png("libstreetmap/resources/atm-machine.png");
     int scalingFac = 2000000/g->get_visible_world().area();
     int iconFac = std::min(scalingFac, 5);
     for (size_t i=0; i<POIs.size();i++){
