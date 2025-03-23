@@ -1049,20 +1049,6 @@ void draw_main_canvas(ezgl::renderer *g)
     drawStreetNames(g);
     //drawScale(g);
     drawPath(g);
-
-    auto end_time = std::chrono::high_resolution_clock::now(); // 记录结束时间
-    std::chrono::duration<double> elapsed = end_time - start_time; // 计算时间差
-     // **存储到 CSV**
-    std::ofstream csv_file;
-    csv_file.open("execution_time.csv", std::ios::app); // 追加模式
-    if (csv_file.is_open()) {
-        csv_file << zoomLevel << "," << elapsed.count() << "\n";
-        csv_file.close();
-    } else {
-        std::cerr << "Error opening CSV file!" << std::endl;
-    }
-
-    std::cout << "Zoom Level: " << zoomLevel << " - Execution Time: " << elapsed.count()/1.2 << " seconds" << std::endl;
 }
 
 // Set Initial View Using LatLon Bounds
