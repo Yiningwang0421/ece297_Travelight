@@ -33,6 +33,7 @@
 #include <fstream> 
 
 #include <unordered_set>
+
 extern std::vector<std::vector<StreetSegmentIdx>> streetSegmentVector; 
 
 // helper function declarations
@@ -41,6 +42,7 @@ void drawRoads(ezgl::renderer *g);
 void drawPOIs(ezgl::renderer *g);
 void drawIntersectionHighlight(ezgl::renderer *g);
 void drawOneWayArrows(ezgl::renderer *g);
+void drawPath(ezgl::renderer *g);
 
 double x_from_lon(double lon);
 double y_from_lat(double lat);
@@ -176,7 +178,10 @@ std::vector<RoadLabel> main_roads;
 std::vector<RoadLabel> secondary;  
 std::vector<RoadLabel> minor;     
 
+//The path from one point to another
+std::vector<StreetSegmentIdx> currentPath;
 
+//The soreted vectors that has the features from the largest area to the least
 std::vector<FeatureIdx> sortedFeatureIndices;
 
 // Convert Latitude/Longitude to X/Y using Equirectangular Projection
@@ -916,6 +921,7 @@ void draw_main_canvas(ezgl::renderer *g)
     drawRiverNames(g); 
     drawStreetNames(g);
     drawScale(g);
+    drawPath(g);
 
     auto end_time = std::chrono::high_resolution_clock::now(); // 记录结束时间
     std::chrono::duration<double> elapsed = end_time - start_time; // 计算时间差
@@ -1427,7 +1433,7 @@ void preloadFeatureDrawingOrder() {
         area_feature_pairs.emplace_back(area, i);
     }
 
-    // Sort descending by area
+    // Sort descending by area （helped by chatgpt）
     std::sort(area_feature_pairs.begin(), area_feature_pairs.end(),
               [](const auto &a, const auto &b) {
                   return a.first > b.first;
@@ -1438,3 +1444,23 @@ void preloadFeatureDrawingOrder() {
         sortedFeatureIndices.push_back(pair.second);
     }
 }
+
+void drawPath(ezgl::renderer *g) {
+    if (currentPath.empty()) return;
+
+    g->set_line_width(5);  
+    g->set_color(ezgl::BLUE);  
+
+    for (size_t i = 0; i < currentPath.size(); ++i) {
+        StreetSegmentInfo seg = getStreetSegmentInfo(currentPath[i]);
+
+        LatLon from = getIntersectionPosition(seg.from);
+        LatLon to = getIntersectionPosition(seg.to);
+
+        ezgl::point2d p1(x_from_lon(from.longitude()), y_from_lat(from.latitude()));
+        ezgl::point2d p2(x_from_lon(to.longitude()), y_from_lat(to.latitude()));
+
+        g->draw_line(p1, p2);
+    }
+}
+
