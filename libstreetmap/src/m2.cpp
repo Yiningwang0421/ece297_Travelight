@@ -29,6 +29,8 @@
 #include <iostream>
 #include <unordered_map>
 #include <sstream>  // Required for std::istringstream
+#include <chrono>
+#include <fstream> 
 
 #include <unordered_set>
 extern std::vector<std::vector<StreetSegmentIdx>> streetSegmentVector; 
@@ -91,6 +93,8 @@ void load_poi_data();
 void draw_main_canvas(ezgl::renderer *g);
 void setInterface(ezgl::application &application);
 void load_street_names();
+void preloadFeatureDrawingOrder();
+
 
 
 // Stores road data as a vector of point sequences (each road is represented as a series of points)
@@ -156,7 +160,10 @@ struct RoadLabel {
 std::vector<RoadLabel> highways;   
 std::vector<RoadLabel> main_roads; 
 std::vector<RoadLabel> secondary;  
-std::vector<RoadLabel> minor;      
+std::vector<RoadLabel> minor;     
+
+
+std::vector<FeatureIdx> sortedFeatureIndices;
 
 // Convert Latitude/Longitude to X/Y using Equirectangular Projection
 double x_from_lon(double lon) {
@@ -520,10 +527,12 @@ void switchMap(GtkComboBoxText* self, ezgl::application* app){
         ezgl::renderer *g = app->get_renderer();
         g->set_visible_world(initial_world); 
         pre_load_road_data();
+        preloadFeatureDrawingOrder();
         loadHighway();
         load_road_data();
         loadPOIs();
         loadIntersections();
+        
         double initial_width = g->get_visible_world().width();
         zoomLevel = getZoomLevel(g, initial_width);
         app->refresh_drawing();
@@ -717,6 +726,9 @@ void drawScale(ezgl::renderer *g) {
 // Draw main canvas
 void draw_main_canvas(ezgl::renderer *g)
 {
+    auto start_time = std::chrono::high_resolution_clock::now(); // 记录开始时间
+
+
     if(nightmode == true){
         g->set_color(17, 20, 24);
     }
@@ -750,6 +762,20 @@ void draw_main_canvas(ezgl::renderer *g)
     drawRiverNames(g); 
     drawStreetNames(g);
     drawScale(g);
+
+    auto end_time = std::chrono::high_resolution_clock::now(); // 记录结束时间
+    std::chrono::duration<double> elapsed = end_time - start_time; // 计算时间差
+     // **存储到 CSV**
+    std::ofstream csv_file;
+    csv_file.open("execution_time.csv", std::ios::app); // 追加模式
+    if (csv_file.is_open()) {
+        csv_file << zoomLevel << "," << elapsed.count() << "\n";
+        csv_file.close();
+    } else {
+        std::cerr << "Error opening CSV file!" << std::endl;
+    }
+
+    std::cout << "Zoom Level: " << zoomLevel << " - Execution Time: " << elapsed.count()/1.2 << " seconds" << std::endl;
 }
 
 // Set Initial View Using LatLon Bounds
@@ -793,6 +819,7 @@ void drawMap() {
     ezgl::application application(settings);
     setInterface(application);
     pre_load_road_data();
+    preloadFeatureDrawingOrder();
     loadHighway();
     load_road_data();   
     //load_poi_data();
@@ -807,18 +834,13 @@ void drawFeatures(ezgl::renderer *g) {
 
 //Function for drawing the shapes of the features
 void drawFeatureShapes(ezgl::renderer *g) {
-    for (FeatureIdx i = 0; i < getNumFeatures(); i++) {
+    for (FeatureIdx i : sortedFeatureIndices) {
         FeatureType type = getFeatureType(i);
         int numPoints = getNumFeaturePoints(i);
         if (numPoints < 2) continue;
 
-        // Skip drawing buildings unless zoom > 60
-        if (type == BUILDING && zoomLevel < 60) continue;
-        if (type == BUILDING && !showBuilding)
-        {
+        if (type == BUILDING && (zoomLevel < 60 || !showBuilding))
             continue;
-        }
-        
 
         std::vector<ezgl::point2d> points;
         for (int j = 0; j < numPoints; j++) {
@@ -826,43 +848,44 @@ void drawFeatureShapes(ezgl::renderer *g) {
             points.push_back(ezgl::point2d(x_from_lon(latlon.longitude()), y_from_lat(latlon.latitude())));
         }
 
-        // Feature Colors
-        if(nightmode == true){
-            if (type == PARK || type == GREENSPACE) {
+        // Color settings (your existing logic)
+        if (nightmode) {
+            if (type == PARK || type == GREENSPACE)
                 g->set_color(20, 61, 39);
-            } else if (type == LAKE || type == RIVER || type == STREAM) {
+            else if (type == LAKE || type == RIVER || type == STREAM)
                 g->set_color(24, 34, 45);
-            } else if (type == BEACH) {
+            else if (type == BEACH)
                 g->set_color(238, 214, 175);
-            } else if (type == ISLAND) {
+            else if (type == ISLAND)
                 g->set_color(29, 37, 44);
-            } else if (type == GOLFCOURSE) {
+            else if (type == GOLFCOURSE)
                 g->set_color(43, 53, 61);
-            } else if (type == BUILDING) {
+            else if (type == BUILDING)
                 g->set_color(80, 80, 80);
-            } else {
+            else if (type == GLACIER)
+                g->set_color(255, 255, 255);
+            else
                 g->set_color(30, 30, 30);
-            }
-        }
-        else{
-            if (type == PARK || type == GREENSPACE) {
+        } else {
+            if (type == PARK || type == GREENSPACE)
                 g->set_color(181, 220, 159);
-            } else if (type == LAKE || type == RIVER || type == STREAM) {
+            else if (type == LAKE || type == RIVER || type == STREAM)
                 g->set_color(173, 216, 230);
-            } else if (type == BEACH) {
+            else if (type == BEACH)
                 g->set_color(238, 214, 175);
-            } else if (type == ISLAND) {
+            else if (type == ISLAND)
                 g->set_color(205, 183, 158);
-            } else if (type == GOLFCOURSE) {
+            else if (type == GOLFCOURSE)
                 g->set_color(119, 221, 119);
-            } else if (type == BUILDING) {
+            else if (type == BUILDING)
                 g->set_color(169, 169, 169);
-            } else {
+            else if (type == GLACIER)
+                g->set_color(255, 255, 255);
+            else
                 g->set_color(0, 0, 0);
-            }
         }
 
-        // Draw feature shape
+        // Draw
         if (type != RIVER && type != STREAM) {
             g->fill_poly(points);
         } else {
@@ -1207,5 +1230,34 @@ void pre_load_road_data() {
             accumulated_distance -= segment_length;  // Adjust for next segment
             if (accumulated_distance < 0) accumulated_distance = 0;
         }
+    }
+}
+
+void preloadFeatureDrawingOrder() {
+    sortedFeatureIndices.clear();
+
+    // Temporary vector to store (area, feature index)
+    std::vector<std::pair<double, FeatureIdx>> area_feature_pairs;
+
+    for (FeatureIdx i = 0; i < getNumFeatures(); ++i) {
+        int numPoints = getNumFeaturePoints(i);
+        if (numPoints < 3) continue; // Must be a polygon
+
+        // Compute polygon area (Shoelace formula in screen space)
+        double area = 0.0;
+        area = findFeatureArea(i);
+
+        area_feature_pairs.emplace_back(area, i);
+    }
+
+    // Sort descending by area
+    std::sort(area_feature_pairs.begin(), area_feature_pairs.end(),
+              [](const auto &a, const auto &b) {
+                  return a.first > b.first;
+              });
+
+    // Extract ordered indices
+    for (const auto &pair : area_feature_pairs) {
+        sortedFeatureIndices.push_back(pair.second);
     }
 }
