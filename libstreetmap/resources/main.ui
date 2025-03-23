@@ -2,12 +2,64 @@
 <!-- Generated with glade 3.40.0 -->
 <interface>
   <requires lib="gtk+" version="3.20"/>
+  <object class="GtkWindow" id="HelpWindow">
+    <property name="can-focus">False</property>
+    <property name="title" translatable="yes">User Guide</property>
+    <property name="default-width">900</property>
+    <child>
+      <object class="GtkBox" id="HelpBox">
+        <property name="visible">True</property>
+        <property name="can-focus">False</property>
+        <property name="orientation">vertical</property>
+        <child>
+          <object class="GtkLabel" id="HelpLabel">
+            <property name="visible">True</property>
+            <property name="can-focus">False</property>
+            <property name="label" translatable="yes">Welcome To The JWL GIS. 
+
+-Use the search bar to select your start and end point of navigation. 
+-You can use the search bar to find your street and intersections.
+-You can click on each street intersecting point to see the intersection
+information.
+-During the navigation, you can follow the given direction about
+turning street, street paths, and the total distance to the destination.
+-The side bar contains multiple buttons for you to manipulate, you 
+can click on them based on your needs.
+-If you want to check the services around your destination, zoom in
+to see the labels for service features such as restaurant, hospital,
+parking location and bike rental.</property>
+            <attributes>
+              <attribute name="font-desc" value="C059 12"/>
+            </attributes>
+          </object>
+          <packing>
+            <property name="expand">False</property>
+            <property name="fill">True</property>
+            <property name="position">0</property>
+          </packing>
+        </child>
+        <child>
+          <object class="GtkButton" id="CloseHelpWindow">
+            <property name="label" translatable="yes">CLOSE</property>
+            <property name="visible">True</property>
+            <property name="can-focus">True</property>
+            <property name="receives-default">True</property>
+          </object>
+          <packing>
+            <property name="expand">False</property>
+            <property name="fill">True</property>
+            <property name="position">1</property>
+          </packing>
+        </child>
+      </object>
+    </child>
+  </object>
   <object class="GtkWindow" id="MainWindow">
     <property name="visible">True</property>
     <property name="can-focus">False</property>
-    <property name="title">EZGL Example Application</property>
-    <property name="default-width">800</property>
-    <property name="default-height">600</property>
+    <property name="title" translatable="yes">Powerful GIS Team JKL</property>
+    <property name="default-width">1200</property>
+    <property name="default-height">800</property>
     <child>
       <!-- n-columns=2 n-rows=5 -->
       <object class="GtkGrid" id="OuterGrid">
@@ -40,23 +92,6 @@
                 <property name="margin-right">88</property>
                 <property name="column-spacing">1</property>
                 <property name="baseline-row">1</property>
-                <child>
-                  <object class="GtkButton" id="RightButton">
-                    <property name="visible">True</property>
-                    <property name="can-focus">False</property>
-                    <property name="receives-default">True</property>
-                    <child>
-                      <object class="GtkArrow" id="RightArrow">
-                        <property name="visible">True</property>
-                        <property name="can-focus">False</property>
-                      </object>
-                    </child>
-                  </object>
-                  <packing>
-                    <property name="left-attach">2</property>
-                    <property name="top-attach">1</property>
-                  </packing>
-                </child>
                 <child>
                   <object class="GtkButton" id="ZoomOutButton">
                     <property name="label" translatable="yes">Zoom Out</property>
@@ -141,24 +176,6 @@
                   </packing>
                 </child>
                 <child>
-                  <object class="GtkButton" id="LeftButton">
-                    <property name="visible">True</property>
-                    <property name="can-focus">False</property>
-                    <property name="receives-default">True</property>
-                    <child>
-                      <object class="GtkArrow" id="LeftArrow">
-                        <property name="visible">True</property>
-                        <property name="can-focus">False</property>
-                        <property name="arrow-type">left</property>
-                      </object>
-                    </child>
-                  </object>
-                  <packing>
-                    <property name="left-attach">0</property>
-                    <property name="top-attach">1</property>
-                  </packing>
-                </child>
-                <child>
                   <object class="GtkButton" id="showbuilding">
                     <property name="label" translatable="yes">Building</property>
                     <property name="visible">True</property>
@@ -229,7 +246,51 @@
                   </packing>
                 </child>
                 <child>
-                  <placeholder/>
+                  <object class="GtkButton" id="RightButton">
+                    <property name="visible">True</property>
+                    <property name="can-focus">False</property>
+                    <property name="receives-default">True</property>
+                    <child>
+                      <object class="GtkArrow" id="RightArrow">
+                        <property name="visible">True</property>
+                        <property name="can-focus">False</property>
+                      </object>
+                    </child>
+                  </object>
+                  <packing>
+                    <property name="left-attach">2</property>
+                    <property name="top-attach">1</property>
+                  </packing>
+                </child>
+                <child>
+                  <object class="GtkButton" id="HelpButton">
+                    <property name="label" translatable="yes">Help</property>
+                    <property name="visible">True</property>
+                    <property name="can-focus">True</property>
+                    <property name="receives-default">True</property>
+                  </object>
+                  <packing>
+                    <property name="left-attach">1</property>
+                    <property name="top-attach">1</property>
+                  </packing>
+                </child>
+                <child>
+                  <object class="GtkButton" id="LeftButton">
+                    <property name="visible">True</property>
+                    <property name="can-focus">False</property>
+                    <property name="receives-default">True</property>
+                    <child>
+                      <object class="GtkArrow" id="LeftArrow">
+                        <property name="visible">True</property>
+                        <property name="can-focus">False</property>
+                        <property name="arrow-type">left</property>
+                      </object>
+                    </child>
+                  </object>
+                  <packing>
+                    <property name="left-attach">0</property>
+                    <property name="top-attach">1</property>
+                  </packing>
                 </child>
                 <child>
                   <placeholder/>
@@ -311,27 +372,6 @@
           </packing>
         </child>
         <child>
-          <object class="GtkOverlay">
-            <property name="visible">True</property>
-            <property name="can-focus">False</property>
-            <child>
-              <object class="GtkDrawingArea" id="MainCanvas">
-                <property name="visible">True</property>
-                <property name="can-focus">False</property>
-                <property name="hexpand">True</property>
-                <property name="vexpand">True</property>
-              </object>
-              <packing>
-                <property name="index">-1</property>
-              </packing>
-            </child>
-          </object>
-          <packing>
-            <property name="left-attach">0</property>
-            <property name="top-attach">2</property>
-          </packing>
-        </child>
-        <child>
           <object class="GtkSearchEntry" id="street_1">
             <property name="visible">True</property>
             <property name="can-focus">True</property>
@@ -362,6 +402,27 @@
           <packing>
             <property name="left-attach">0</property>
             <property name="top-attach">1</property>
+          </packing>
+        </child>
+        <child>
+          <object class="GtkOverlay">
+            <property name="visible">True</property>
+            <property name="can-focus">False</property>
+            <child>
+              <object class="GtkDrawingArea" id="MainCanvas">
+                <property name="visible">True</property>
+                <property name="can-focus">False</property>
+                <property name="hexpand">True</property>
+                <property name="vexpand">True</property>
+              </object>
+              <packing>
+                <property name="index">-1</property>
+              </packing>
+            </child>
+          </object>
+          <packing>
+            <property name="left-attach">0</property>
+            <property name="top-attach">2</property>
           </packing>
         </child>
         <child>

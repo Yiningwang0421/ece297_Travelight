@@ -56,13 +56,16 @@ std::string getInput(GtkSearchEntry *entry);
 void button_clicked(GtkWidget *, gpointer data);
 void drawIntersect(ezgl::renderer *g);
 void setUpShow(ezgl::application *app, bool /*unused*/);
-std::vector<IntersectionIdx> findIntersectionsOfTwoStreets2(std::pair<StreetIdx, StreetIdx> street_ids);
-void autoComplete(GtkSearchEntry *entry);
+void autoComplete(GtkSearchEntry *entry, ezgl::application *app);
 void dropMenu(ezgl::application *app);
 void loadIntersections();
 void switchMap(GtkComboBoxText* self, ezgl::application* app);
 void nightMode(ezgl::application *app, bool /*Window*/);
 gboolean night_switch(GtkSwitch *widget, gboolean switch_state, ezgl::application *app);
+void StreetSelect(GtkComboBox *self, gpointer data);
+gboolean check_street(GtkEntryCompletion *completion, GtkTreeModel *model, GtkTreeIter *iter, gpointer data);
+std::vector<std::string> getIntersectStreets(const std::string &streetName);
+void cleanHighlight(GtkSearchEntry *entry, gpointer data);
 
 ezgl::point2d findLargestInscribedRectangle(FeatureIdx feature_id);
 std::string splitTextIntoLines(const std::string& text);
@@ -71,11 +74,15 @@ void drawFeatureNames(ezgl::renderer *g);
 void drawRiverNames(ezgl::renderer *g);
 void act_on_mouse_click(ezgl::application* app, GdkEventButton* event, double x, double y);
 
+// functions to preload & load the street intersection informations
 void showStreetNames(GtkWidget *widget, gpointer data);
 void showBuildings(GtkWidget *widget, gpointer data);
 void showBuildingnames(GtkWidget *widget, gpointer data);
 void showPOIS(GtkWidget *widget, gpointer data);
 void showDirections(GtkWidget *widget, gpointer data);
+// show textmessage window for help and tutorials
+void showHelp(GtkWidget *, gpointer data);
+void closeHelpWindow(GtkWidget *, gpointer data);
 
 // draw the scale bar
 void drawScale(ezgl::renderer *g);
@@ -96,6 +103,9 @@ void load_street_names();
 void preloadFeatureDrawingOrder();
 
 
+// Milestone 3 Functions
+void BFS();
+
 
 // Stores road data as a vector of point sequences (each road is represented as a series of points)
 std::vector<std::vector<ezgl::point2d>> roads;  
@@ -105,6 +115,7 @@ ezgl::surface *poi_icon;
 ezgl::surface *rest_icon;
 ezgl::surface *hosp_icon;
 ezgl::surface *bike_icon;
+ezgl::surface *atm_icon;
 
 // Stores projected (x, y) coordinates of Points of Interest (POIs)
 std::vector<ezgl::point2d> POIs;
@@ -135,6 +146,9 @@ std::vector<std::string> mapOptions = {"Select Map:", "Beijing, China","Beirut, 
 
 // Maps OpenStreetMap (OSM) Way IDs to their corresponding road type (e.g., highway, residential, etc.)
 std::unordered_map<OSMID, std::string> osmHighway;
+
+// store the highlighted street segments
+std::vector<StreetSegmentIdx> highlightStreet;
 
 // Global rendering variables
 double zoomLevel;  // Current zoom level of the map
@@ -337,89 +351,87 @@ std::string getInput(GtkSearchEntry *entry){
     return std::string(gtk_entry_get_text(GTK_ENTRY(entry)));
 }
 
-// std::vector<IntersectionIdx> findIntersectionsOfTwoStreets2(std::pair<StreetIdx, StreetIdx> street_ids) {
-//     // Get all intersections of both streets using available m1 functions
-//     std::vector<IntersectionIdx> street1Intersections = findIntersectionsOfStreet(street_ids.first);
-//     std::vector<IntersectionIdx> street2Intersections = findIntersectionsOfStreet(street_ids.second);
-
-//     std::vector<IntersectionIdx> commonIntersections;
-
-//     // Use an unordered_set for quick lookups of street2 intersections
-//     std::unordered_set<IntersectionIdx> street2Set(street2Intersections.begin(), street2Intersections.end());
-
-//     // Find intersections that exist in both streets
-//     for (IntersectionIdx intersection : street1Intersections) {
-//         if (street2Set.find(intersection) != street2Set.end()) {
-//             commonIntersections.push_back(intersection);
-//         }
-//     }
-
-//     // Remove duplicates (if necessary)
-//     std::sort(commonIntersections.begin(), commonIntersections.end());
-//     commonIntersections.erase(std::unique(commonIntersections.begin(), commonIntersections.end()), commonIntersections.end());
-
-//     return commonIntersections;
-// }
-
-
 void button_clicked(GtkWidget *, gpointer data){
     if (data == nullptr) {
     std::cerr << "Error: app is null in findButton" << std::endl;
     return;
     }
-
     ezgl::application *app = static_cast<ezgl::application*>(data);
-    std::cout << "Find button clicked" << std::endl;
     std::string street1 = getInput(GTK_SEARCH_ENTRY(app->get_object("street_1")));
     std::string street2 = getInput(GTK_SEARCH_ENTRY(app->get_object("street_2")));
     //convert name to street id
     std::vector<StreetIdx> street1ID = findStreetIdsFromPartialStreetName(street1);
     std::vector<StreetIdx> street2ID = findStreetIdsFromPartialStreetName(street2);
-    if(street1ID.empty() || street2ID.empty()){
+    
+    if(street1ID.empty() && street2ID.empty()){
         GtkWidget *dialog = gtk_message_dialog_new(GTK_WINDOW(gtk_widget_get_toplevel(GTK_WIDGET(app->get_object("MainWindow"))))
-        , GTK_DIALOG_DESTROY_WITH_PARENT, GTK_MESSAGE_INFO, GTK_BUTTONS_CLOSE, "Street does not exist!", "title");
+        , GTK_DIALOG_DESTROY_WITH_PARENT, GTK_MESSAGE_INFO, GTK_BUTTONS_CLOSE, "You Didn't Enter Any Street", "title");
         gtk_window_set_title(GTK_WINDOW(dialog), "ERROR");
         gtk_dialog_run(GTK_DIALOG(dialog));
         gtk_widget_destroy(dialog);
         app->refresh_drawing();
         return;
     }
-    
-    // clear out the current intersection data
     showIntersection.clear();
-    for(StreetIdx s1: street1ID){
-        for(StreetIdx s2: street2ID){
-            std::vector<IntersectionIdx> temp = findIntersectionsOfTwoStreets({s1, s2});
-            showIntersection.insert(showIntersection.end(), temp.begin(), temp.end());
+    highlightStreet.clear();
+
+    // Highlight selected streets
+    for (StreetSegmentIdx i = 0; i < getNumStreetSegments(); i++) {
+        StreetSegmentInfo segInfo = getStreetSegmentInfo(i);
+
+        if ((!street1ID.empty() && std::find(street1ID.begin(), street1ID.end(), segInfo.streetID) != street1ID.end()) ||
+            (!street2ID.empty() && std::find(street2ID.begin(), street2ID.end(), segInfo.streetID) != street2ID.end())) {
+            highlightStreet.push_back(i);
         }
     }
 
-    if(showIntersection.empty()){ //start loading the intersections
-        std::cout << "Intersection not found" << std::endl;
-        std::string intersectionList;
-        for (IntersectionIdx id : showIntersection)
-        {
-            intersectionList += getIntersectionName(id) + "\n"; // add to a review list for no intersection street prepared for later search
+    // If both streets are selected, find intersections
+    if (!street1ID.empty() && !street2ID.empty()) {
+        for (StreetIdx s1 : street1ID) {
+            for (StreetIdx s2 : street2ID) {
+                std::vector<IntersectionIdx> temp = findIntersectionsOfTwoStreets({s1, s2});
+                showIntersection.insert(showIntersection.end(), temp.begin(), temp.end());
+            }
         }
-        GtkWidget *dialog = gtk_message_dialog_new(GTK_WINDOW(gtk_widget_get_toplevel(GTK_WIDGET(app->get_object("MainWindow")))), GTK_DIALOG_MODAL, GTK_MESSAGE_INFO,
-                                                   GTK_BUTTONS_CLOSE, "Found %lu intersections:\n%s", showIntersection.size(), intersectionList.c_str());
+    }
+
+    // If no intersections found, show message
+    if (showIntersection.empty() && !street1ID.empty() && !street2ID.empty()) {
+        GtkWidget *dialog = gtk_message_dialog_new(
+            GTK_WINDOW(gtk_widget_get_toplevel(GTK_WIDGET(app->get_object("MainWindow")))),
+            GTK_DIALOG_MODAL, GTK_MESSAGE_INFO, GTK_BUTTONS_CLOSE,
+            "No intersections found between the selected streets."
+        );
         gtk_window_set_title(GTK_WINDOW(dialog), "No Response");
         gtk_dialog_run(GTK_DIALOG(dialog));
         gtk_widget_destroy(dialog);
-    }
-    else{
-        std::cout << "Intersection found" << std::endl;
-        for(IntersectionIdx id: showIntersection){
-            std::cout << "Intersection id is: " << id << ", streets are: " << getIntersectionName(id) << std::endl;
-        }   
+        app->refresh_drawing();
+        return;
     }
 
-    // auto-centering the GIS systems
-    IntersectionIdx intersectID = showIntersection[0];
-    LatLon intersectPos = getIntersectionPosition(intersectID);
-    ezgl::point2d convertPt(x_from_lon(intersectPos.longitude()), y_from_lat(intersectPos.latitude()));
-    ezgl::rectangle newCenterWorld({convertPt.x - 500, convertPt.y - 500}, {convertPt.x + 500, convertPt.y + 500});
-    app->change_canvas_world_coordinates("MainCanvas", newCenterWorld);
+    // If intersections exist, center the map on the first one
+    if (!showIntersection.empty()) {
+        std::string message = "Found Intersections: \n";
+        for(IntersectionIdx id : showIntersection){
+            LatLon pos = getIntersectionPosition(id);
+            message += getIntersectionName(id) + "(Lat: " + std::to_string(pos.latitude()) + ", Lon: " + std::to_string(pos.longitude()) + ")\n";
+        }
+        GtkWidget *dialog = gtk_message_dialog_new(
+            GTK_WINDOW(gtk_widget_get_toplevel(GTK_WIDGET(app->get_object("MainWindow")))),
+            GTK_DIALOG_MODAL, GTK_MESSAGE_INFO, GTK_BUTTONS_CLOSE,
+            "%s", message.c_str()
+        );
+        gtk_window_set_title(GTK_WINDOW(dialog), "Intersection Position");
+        gtk_dialog_run(GTK_DIALOG(dialog));
+        gtk_widget_destroy(dialog);
+
+        IntersectionIdx intersectID = showIntersection[0];
+        LatLon intersectPos = getIntersectionPosition(intersectID);
+        ezgl::point2d convertPt(x_from_lon(intersectPos.longitude()), y_from_lat(intersectPos.latitude()));
+        ezgl::rectangle newCenterWorld({convertPt.x - 500, convertPt.y - 500}, {convertPt.x + 500, convertPt.y + 500});
+        app->change_canvas_world_coordinates("MainCanvas", newCenterWorld);
+    }
+
     app->refresh_drawing();
 }
 
@@ -443,6 +455,9 @@ void setUpShow(ezgl::application *app, bool /*unused*/){
     GtkSearchEntry *entry1 = GTK_SEARCH_ENTRY(app -> get_object("street_1"));
     GtkSearchEntry *entry2 = GTK_SEARCH_ENTRY(app -> get_object("street_2"));
     GtkWidget *findButton = GTK_WIDGET(app -> get_object("find_button"));
+    // highlight selected street:
+    GtkComboBox *selectS1 = GTK_COMBO_BOX(app->get_object("street1"));
+    GtkComboBox *selectS2 = GTK_COMBO_BOX(app->get_object("street2"));
     if(findButton == nullptr){
         return;
     }
@@ -450,36 +465,47 @@ void setUpShow(ezgl::application *app, bool /*unused*/){
         g_signal_connect(findButton, "clicked", G_CALLBACK(button_clicked), app);
     }
 
-    if(entry1 == nullptr || entry2 == nullptr){
-        return;
+    if(entry1){
+        autoComplete(entry1, app);
+        g_signal_connect(entry1, "changed", G_CALLBACK(cleanHighlight), app);
     }
-    else{
-        autoComplete(entry1);
-        autoComplete(entry2);
+    if(entry2){
+        autoComplete(entry2, app);
+        g_signal_connect(entry2, "changed", G_CALLBACK(cleanHighlight), app);
+    }
+    if(selectS1){
+        g_signal_connect(selectS1, "changed", G_CALLBACK(StreetSelect), app);
+    }
+    if(selectS2){
+        g_signal_connect(selectS2, "changed", G_CALLBACK(StreetSelect), app);
     }
 
-    
     // Connect toggle buttons
     GtkWidget *streetnameButton = GTK_WIDGET(app -> get_object("showName"));
     g_signal_connect(streetnameButton, "clicked", G_CALLBACK(showStreetNames), app);
-    std::cout << "detected the showstreetname button" << std::endl;
+    //std::cout << "detected the showstreetname button" << std::endl;
 
     GtkWidget *showBuildingButton = GTK_WIDGET(app -> get_object("showbuilding"));
     g_signal_connect(streetnameButton, "clicked", G_CALLBACK(showBuildings), app);
-    std::cout << "detected the showstreetname button" << std::endl;
+    //std::cout << "detected the showstreetname button" << std::endl;
 
     GtkWidget *showBuildingnameButton = GTK_WIDGET(app -> get_object("showbuildingname"));
     g_signal_connect(streetnameButton, "clicked", G_CALLBACK(showBuildingnames), app);
-    std::cout << "detected the showstreetname button" << std::endl;
+    //std::cout << "detected the showstreetname button" << std::endl;
 
     GtkWidget *showDirectionButton = GTK_WIDGET(app -> get_object("showdirection"));
     g_signal_connect(streetnameButton, "clicked", G_CALLBACK(showDirections), app);
-    std::cout << "detected the showstreetname button" << std::endl;
+    //std::cout << "detected the showstreetname button" << std::endl;
 
     GtkWidget *showPOIButton = GTK_WIDGET(app -> get_object("showPOI"));
     g_signal_connect(streetnameButton, "clicked", G_CALLBACK(showPOIS), app);
-    std::cout << "detected the showstreetname button" << std::endl;
+    //std::cout << "detected the showstreetname button" << std::endl;
     
+    GtkWidget *helpButton =  GTK_WIDGET(app -> get_object("HelpButton"));
+    g_signal_connect(helpButton, "clicked", G_CALLBACK(showHelp), app);
+
+    GtkWidget *closeHelp = GTK_WIDGET(app -> get_object("CloseHelpWindow"));
+    g_signal_connect(closeHelp, "clicked", G_CALLBACK(closeHelpWindow), app);
     app->create_combo_box_text("Select Map", 0, switchMap, mapOptions);
 }
 
@@ -550,6 +576,22 @@ gboolean night_switch(GtkSwitch *widget, gboolean switch_state, ezgl::applicatio
     return false;
 }
 
+void showHelp(GtkWidget *, gpointer data){
+    ezgl::application *app = static_cast<ezgl::application *>(data);
+    GtkWidget *helpWindow = GTK_WIDGET(app->get_object("HelpWindow"));
+    if(helpWindow){
+        gtk_widget_show_all(helpWindow);
+    }
+    g_signal_connect(helpWindow, "delete-event", G_CALLBACK(gtk_widget_hide_on_delete), NULL);
+}
+
+void closeHelpWindow(GtkWidget *, gpointer data){
+    ezgl::application *app = static_cast<ezgl::application *>(data);
+    GtkWidget *helpWindow = GTK_WIDGET(app->get_object("HelpWindow"));
+    if(helpWindow){
+        gtk_widget_hide(helpWindow);
+    }
+}
 
 // store street names
 void load_street_names(){
@@ -563,12 +605,125 @@ void load_street_names(){
 }
 
 // complete the auto display of related streetnames
-void autoComplete(GtkSearchEntry *entry){
+void autoComplete(GtkSearchEntry *entry, ezgl::application *app){
     GtkEntryCompletion *completion = gtk_entry_completion_new();
     gtk_entry_completion_set_text_column(completion, 0);
     gtk_entry_completion_set_model(completion, GTK_TREE_MODEL(street_list_store));
     gtk_entry_set_completion(GTK_ENTRY(entry), completion);
-    g_object_unref(completion);
+    g_signal_connect(completion, "match-selected", G_CALLBACK(check_street), app);
+}
+
+gboolean check_street(GtkEntryCompletion *completion, GtkTreeModel *model, GtkTreeIter *iter, gpointer data){
+    ezgl::application *app = static_cast<ezgl::application *>(data);
+    gchar *streetname_ptr = nullptr;
+    gtk_tree_model_get(model, iter, 0, &streetname_ptr, -1);
+    if (streetname_ptr == nullptr) return FALSE;
+
+    std::string selectedStreet(streetname_ptr);
+    g_free(streetname_ptr);
+    if (selectedStreet.empty()) return FALSE;
+
+    GtkEntry *entry = GTK_ENTRY(gtk_entry_completion_get_entry(completion));
+    std::string userInput = gtk_entry_get_text(entry);
+
+    size_t andPos = userInput.find('&');
+    if (andPos != std::string::npos) {
+        // User triggered the "&" input, start autocomplete for second street
+        std::string street1 = userInput.substr(0, andPos);
+        std::vector<std::string> intersectStreet = getIntersectStreets(street1);
+
+        std::cout << "[DEBUG] First Street: " << street1 << ", Second Street Search Triggered" << std::endl;
+        std::cout << "[DEBUG] Found " << intersectStreet.size() << " intersecting streets." << std::endl;
+
+        if (!intersectStreet.empty()) {
+            // Update the dropdown list dynamically
+            GtkListStore *storeIntersectSt = gtk_list_store_new(1, G_TYPE_STRING);
+            GtkTreeIter Iterate;
+            for (const std::string &street : intersectStreet) {
+                gtk_list_store_append(storeIntersectSt, &Iterate);
+                gtk_list_store_set(storeIntersectSt, &Iterate, 0, street.c_str(), -1);
+            }
+            gtk_entry_completion_set_model(completion, GTK_TREE_MODEL(storeIntersectSt));
+        } else {
+            std::cout << "[WARNING] No intersecting streets found!" << std::endl;
+        }
+
+        // Update the search bar with "&" formatted input
+        std::string newSearchBar = street1 + " & ";
+        gtk_entry_set_text(entry, newSearchBar.c_str());
+    } else {
+        // Normal street selection process
+        gtk_entry_set_text(entry, selectedStreet.c_str());
+        highlightStreet.clear();
+
+        // Highlight street segments
+        std::vector<StreetIdx> streetID = findStreetIdsFromPartialStreetName(selectedStreet);
+        for (StreetIdx s : streetID) {
+            for (StreetSegmentIdx i = 0; i < getNumStreetSegments(); i++) {
+                StreetSegmentInfo segInfo = getStreetSegmentInfo(i);
+                if (segInfo.streetID == s) {
+                    highlightStreet.push_back(i);
+                }
+            }
+        }
+    }
+
+    app->refresh_drawing();
+    return TRUE;
+}
+
+// function searching all the intersecting streets with this current input
+std::vector<std::string> getIntersectStreets(const std::string &streetName){
+    std::unordered_set<std::string> intersectSet;
+    std::vector<StreetIdx> streetIDs = findStreetIdsFromPartialStreetName(streetName);
+    if(streetIDs.empty()) return {};
+    for(StreetIdx street: streetIDs){
+        std::vector<IntersectionIdx> intersections = findIntersectionsOfStreet(street);
+        std::cout << "Intersections for Street " << street << ": ";
+        for (IntersectionIdx inter : intersections) std::cout << inter << " ";
+        std::cout << std::endl;
+
+        for(IntersectionIdx intersection: intersections){
+            int numSeg = getNumIntersectionStreetSegment(intersection);
+            for(int i = 0; i < numSeg; i++){
+                StreetSegmentIdx segIdx = getIntersectionStreetSegment(intersection, i);
+                StreetSegmentInfo segInfo = getStreetSegmentInfo(segIdx);
+                if(segInfo.streetID != street){
+                    intersectSet.insert(getStreetName(segInfo.streetID));
+                }
+            }
+        }
+    }
+    return std::vector<std::string>(intersectSet.begin(), intersectSet.end());
+}
+void StreetSelect(GtkComboBox *self, gpointer data){
+    ezgl::application *app  = static_cast<ezgl::application *>(data);
+    const char* streetSelect = gtk_combo_box_text_get_active_text(GTK_COMBO_BOX_TEXT(self));
+    if(streetSelect == nullptr) return;
+    std::string selection(streetSelect); //creating a string for the name match checking
+    g_free((void*)streetSelect);
+    if(selection.empty()) return;
+
+    highlightStreet.clear();
+    std::vector <StreetIdx> streetId = findStreetIdsFromPartialStreetName(streetSelect);
+    for(StreetIdx s : streetId){
+        for(StreetSegmentIdx i = 0; i < getNumStreetSegments(); i++){
+            StreetSegmentInfo segInfo = getStreetSegmentInfo(i);
+            if(segInfo.streetID == s){
+                highlightStreet.push_back(i);
+            }
+        }
+    }
+    app->refresh_drawing();
+}
+
+void cleanHighlight(GtkSearchEntry *entry, gpointer data){
+    ezgl::application *app = static_cast<ezgl::application *>(data);
+    const char *input_ptr = gtk_entry_get_text(GTK_ENTRY(entry));
+    if(input_ptr == nullptr || strlen(input_ptr) == 0){
+        highlightStreet.clear();
+        app->refresh_drawing();
+    }
 }
 
 // connect a dropdown menu in search bars
@@ -576,8 +731,8 @@ void dropMenu(ezgl::application *app){
     GtkSearchEntry *entry1 = GTK_SEARCH_ENTRY(app->get_object("street_1"));
     GtkSearchEntry *entry2 = GTK_SEARCH_ENTRY(app->get_object("street_2"));
     if(entry1 && entry2){
-        autoComplete(entry1);
-        autoComplete(entry2);
+        autoComplete(entry1, app);
+        autoComplete(entry2, app);
     }
 }
  
@@ -688,7 +843,6 @@ void loadPOIs(){
         POIs.push_back(projection);
         
         poiNames.push_back(getPOIName(i));
-        std::cout<<getPOIType(i)<<std::endl;
     }
 }
 
@@ -784,7 +938,6 @@ void setInterface(ezgl::application &application) {
     dropMenu(&application);
     double min_lat, max_lat, min_lon, max_lon;
     calculate_map_bound(min_lat, max_lat, min_lon, max_lon);
-
     ezgl::rectangle initial_world({x_from_lon(min_lon), y_from_lat(min_lat)}, {x_from_lon(max_lon), y_from_lat(max_lat)});
     application.add_canvas("MainCanvas", draw_main_canvas, initial_world);
 }
@@ -899,44 +1052,62 @@ void drawFeatureShapes(ezgl::renderer *g) {
 
 //function for drawing roads
 void drawRoads(ezgl::renderer *g) {
-    for (int i = 0; i < roads.size(); i++) {
-        int roadType = road_types[i];
+    for (StreetSegmentIdx segmentId = 0; segmentId < getNumStreetSegments(); segmentId++) {
+        StreetSegmentInfo segInfo = getStreetSegmentInfo(segmentId);
+        int roadType = classify_road(segInfo.wayOSMID);
 
         // Skip roads based on zoom level
         if (zoomLevel < 2 && roadType != 3 ) continue;  // Show only highways
         if (zoomLevel < 4 && ((roadType == 1)||(roadType == 0))) continue;  // Hide secondary roads
         if (zoomLevel < 30 && roadType == 0) continue;  // Hide main roads
         
-        // Set road color & width
-        if(nightmode == false){
-            if (roadType == 3) {
-                g->set_color(255, 140, 0);  // Highways
-                g->set_line_width(3);
-            } else if (roadType == 2) {
-                g->set_color(150, 150, 150);  // Major roads
-                g->set_line_width(2);
-            } else {
-                g->set_color(ezgl::WHITE);  // Secondary roads
-                g->set_line_width(1);
-            }
-        }
-        else{
-            if (roadType == 3) {
-                g->set_color(82, 113, 152);  // Highways
-                g->set_line_width(3);
-            } else if (roadType == 2) {
-                g->set_color(56, 79, 102);  // Major roads
-                g->set_line_width(2);
-            } else {
-                g->set_color(30, 40, 51);  // Secondary roads
-                g->set_line_width(1);
-            }
-        }
+        //show the highlight  street
+        bool  streetHighlight = (std::find(highlightStreet.begin(), highlightStreet.end(), segmentId) != highlightStreet.end());
 
-        // Draw road as a polyline
-        for (size_t j = 0; j < roads[i].size() - 1; j++) {
-            g->draw_line(roads[i][j], roads[i][j + 1]);
+        // Set road color & width
+        if(streetHighlight){
+            g->set_color(ezgl::BLUE);
+            g->set_line_width(5);
         }
+        else{ // draw regular roads
+            if(nightmode == false){
+                if (roadType == 3) {
+                    g->set_color(255, 140, 0);  // Highways
+                    g->set_line_width(3);
+                } else if (roadType == 2) {
+                    g->set_color(150, 150, 150);  // Major roads
+                    g->set_line_width(2);
+                } else {
+                    g->set_color(ezgl::WHITE);  // Secondary roads
+                    g->set_line_width(1);
+                }
+            }
+            else{ // show nightmode
+                if (roadType == 3) {
+                    g->set_color(82, 113, 152);  // Highways
+                    g->set_line_width(3);
+                } else if (roadType == 2) {
+                    g->set_color(56, 79, 102);  // Major roads
+                    g->set_line_width(2);
+                } else {
+                    g->set_color(30, 40, 51);  // Secondary roads
+                    g->set_line_width(1);
+                }
+            }
+        }
+        // Draw road as a polyline
+        LatLon start = getIntersectionPosition(segInfo.from);
+        LatLon end = getIntersectionPosition(segInfo.to);
+        ezgl::point2d startPt(x_from_lon(start.longitude()), y_from_lat(start.latitude()));
+        ezgl::point2d endPt(x_from_lon(end.longitude()), y_from_lat(end.latitude()));
+        g->draw_line(startPt, endPt);
+        for(int i = 0; i < segInfo.numCurvePoints; i++){
+            LatLon curvePt = getStreetSegmentCurvePoint(segmentId, i);
+            ezgl::point2d curvePoint(x_from_lon(curvePt.longitude()), y_from_lat(curvePt.latitude()));
+            g->draw_line(startPt, curvePoint);
+            startPt = curvePoint;
+        }
+        g->draw_line(startPt, endPt);
     }
 }
 
@@ -958,6 +1129,9 @@ void drawPOIs(ezgl::renderer *g){
     
     //<a href="https://www.flaticon.com/free-icons/rental" title="rental icons">Rental icons created by surang - Flaticon</a>
     bike_icon = g->load_png("libstreetmap/resources/bicycle_rent.png");
+    
+    //<a href="https://www.flaticon.com/free-icons/atm-machine" title="atm machine icons">Atm machine icons created by Acellalelo - Flaticon</a>
+    atm_icon = g->load_png("libstreetmap/resources/atm-machine.png");
     int scalingFac = 2000000/g->get_visible_world().area();
     int iconFac = std::min(scalingFac, 5);
     for (size_t i=0; i<POIs.size();i++){
@@ -971,13 +1145,16 @@ void drawPOIs(ezgl::renderer *g){
             else if (getPOIType(i) == "bicycle_rental"){
                 g->draw_surface(bike_icon,POIs[i], 0.03*iconFac);
             }
+            else if (getPOIType(i) == "atm"){
+                g->draw_surface(atm_icon,POIs[i], 0.05*iconFac);
+            }
             else{
                 g->draw_surface(poi_icon,POIs[i], 0.01*iconFac);
             }
             if (scalingFac>=50){
                 g->set_color(0,0,0);
                 g->set_font_size(10.0);
-                ezgl::point2d textPos (POIs[i].x, POIs[i].y-3500/zoomLevel);
+                ezgl::point2d textPos (POIs[i].x, POIs[i].y-3000/zoomLevel);
                 g->draw_text(textPos, poiNames[i], 5, 5);
             }
         }

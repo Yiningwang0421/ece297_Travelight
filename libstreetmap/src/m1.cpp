@@ -18,20 +18,8 @@
  * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
  * SOFTWARE.
  */
-#include <iostream>
 #include "m1.h"
-#include "StreetsDatabaseAPI.h"
-#include "OSMDatabaseAPI.h"
-#include "math.h"
-#include <vector>
-#include <unordered_set>
-#include <utility>
-#include <unordered_map>
-#include <string>
-#include <cctype>
-#include <map>
-#include <cmath>
-
+#include "global.h"
 
 // loadMap will be called with the name of the file that stores the "layer-2"
 // map data accessed through StreetsDatabaseAPI: the street and intersection
@@ -72,6 +60,9 @@ int getWayIndexFromOSMID(OSMID way_id);//get the correponding index from the nod
 //global variables for function usage
 std::vector<std::vector<StreetSegmentIdx>> intersection_street_segments;
 std::vector<std::vector<IntersectionIdx>> adjacent_street_segments;
+std::vector<std::vector<std::pair<IntersectionIdx, StreetSegmentIdx>>> outgoingInfo; //Stores the outgoing intersections and street segments of a node
+std::vector<double> segment_travel_time; //Store the travel time of street segments
+double max_speed; //The maximum speed allowed in a map
 
 std::unordered_map<OSMID, std::unordered_map<std::string, std::string>> OSMvec;
 bool loadMap(std::string map_streets_database_filename) {
@@ -95,6 +86,7 @@ bool loadMap(std::string map_streets_database_filename) {
 
     intersection_street_segments.resize(getNumIntersections());
     adjacent_street_segments.resize(getNumIntersections());
+    outgoingInfo.resize(getNumIntersections());
 
     for (IntersectionIdx intersection_id = 0; intersection_id < getNumIntersections(); intersection_id++)
     {
@@ -104,7 +96,7 @@ bool loadMap(std::string map_streets_database_filename) {
             StreetSegmentIdx ss_id = getIntersectionStreetSegment(intersection_id, i); //finding  the streetsegment intersection
             intersection_street_segments[intersection_id].push_back(ss_id);
             StreetSegmentInfo ss_info = getStreetSegmentInfo(ss_id); // get each street's info
-            IntersectionIdx adjacent = 0;
+            IntersectionIdx adjacent = -1;
             bool uniqueAdjSegment = false;
             //finding the adjacent point for forming a vector
             if (ss_info.from == intersection_id){ //head intersection
@@ -115,6 +107,9 @@ bool loadMap(std::string map_streets_database_filename) {
             }
             else if (ss_info.to == intersection_id && ss_info.from == intersection_id){ //corner case for cul-de-sacs
                 adjacent = ss_info.to;
+            }
+            if (adjacent != -1){
+                outgoingInfo[intersection_id].push_back(std::pair(adjacent, ss_id));
             }
             //no duplicate happens
             if(std::find(adjacent_street_segments[intersection_id].begin(), adjacent_street_segments[intersection_id].end(), adjacent) == adjacent_street_segments[intersection_id].end()){
@@ -441,8 +436,7 @@ POIIdx findClosestPOI(LatLon my_position, std::string poi_type)
 // Corner case: cul-de-sacs can connect an intersection to itself (from and to
 // intersection on street segment are the same). In that case include the
 // intersection in the returned vector (no special handling needed)
-std::vector<IntersectionIdx> findAdjacentIntersections(IntersectionIdx intersection_id)
-{
+std::vector<IntersectionIdx> findAdjacentIntersections(IntersectionIdx intersection_id){
     return adjacent_street_segments[intersection_id];
 }
 
@@ -564,7 +558,8 @@ void preprocessStreetSegments(){
     intersectionVector.resize(numStreets);
     int numSegments = getNumStreetSegments();
     segmentData.resize(numSegments);
-
+    
+    max_speed = 0;
     segmentLatLon.resize(numSegments);
 
     // Initialize street bounding box values to extreme placeholders
@@ -585,6 +580,7 @@ void preprocessStreetSegments(){
         // Compute and store segment length and speed limit
         double segmentLength = findStreetSegmentLength(segmentId);
         segmentData[segmentId] = {segmentLength, segmentInfo.speedLimit};
+        segment_travel_time.push_back(segmentLength/segmentInfo.speedLimit);
 
         // Store segment start and end positions
         LatLon fromPos = getIntersectionPosition(segmentInfo.from);
@@ -607,6 +603,9 @@ void preprocessStreetSegments(){
             streetLat[streetId].second = std::max(streetLat[streetId].second, curvePoint.latitude());
             streetLon[streetId].first = std::min(streetLon[streetId].first, curvePoint.longitude());
             streetLon[streetId].second = std::max(streetLon[streetId].second, curvePoint.longitude());
+        }
+        if (segmentInfo.speedLimit > max_speed){
+            max_speed = segmentInfo.speedLimit;
         }
     }
 }
