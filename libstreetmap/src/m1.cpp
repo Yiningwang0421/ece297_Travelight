@@ -60,10 +60,9 @@ int getWayIndexFromOSMID(OSMID way_id);//get the correponding index from the nod
 //global variables for function usage
 std::vector<std::vector<StreetSegmentIdx>> intersection_street_segments;
 std::vector<std::vector<IntersectionIdx>> adjacent_street_segments;
-std::vector<std::vector<std::pair<IntersectionIdx, StreetSegmentIdx>>> outgoingInfo;
-std::vector<LatLon> intersection_positions;
-std::vector<double> segment_travel_time;
-double max_speed;
+std::vector<std::vector<std::pair<IntersectionIdx, StreetSegmentIdx>>> outgoingInfo; //Stores the outgoing intersections and street segments of a node
+std::vector<double> segment_travel_time; //Store the travel time of street segments
+double max_speed; //The maximum speed allowed in a map
 
 std::unordered_map<OSMID, std::unordered_map<std::string, std::string>> OSMvec;
 bool loadMap(std::string map_streets_database_filename) {
@@ -97,7 +96,7 @@ bool loadMap(std::string map_streets_database_filename) {
             StreetSegmentIdx ss_id = getIntersectionStreetSegment(intersection_id, i); //finding  the streetsegment intersection
             intersection_street_segments[intersection_id].push_back(ss_id);
             StreetSegmentInfo ss_info = getStreetSegmentInfo(ss_id); // get each street's info
-            IntersectionIdx adjacent = 0;
+            IntersectionIdx adjacent = -1;
             bool uniqueAdjSegment = false;
             //finding the adjacent point for forming a vector
             if (ss_info.from == intersection_id){ //head intersection
@@ -109,19 +108,18 @@ bool loadMap(std::string map_streets_database_filename) {
             else if (ss_info.to == intersection_id && ss_info.from == intersection_id){ //corner case for cul-de-sacs
                 adjacent = ss_info.to;
             }
+            if (adjacent != -1){
+                outgoingInfo[intersection_id].push_back(std::pair(adjacent, ss_id));
+            }
             //no duplicate happens
             if(std::find(adjacent_street_segments[intersection_id].begin(), adjacent_street_segments[intersection_id].end(), adjacent) == adjacent_street_segments[intersection_id].end()){
                 uniqueAdjSegment = true;
             }
             if (adjacent != 0 && uniqueAdjSegment == true)
             {
-                if (ss_info.to != ss_info.from){
-                    adjacent_street_segments[intersection_id].push_back(adjacent);
-                }
-                outgoingInfo[intersection_id].push_back(std::pair(adjacent, ss_id));
+                adjacent_street_segments[intersection_id].push_back(adjacent);
             }
         }
-        intersection_positions.push_back(getIntersectionPosition(intersection_id));
     }
     
     //OSM storing the value from the map into the osm nodes with the tag pair of the key and value

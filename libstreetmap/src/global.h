@@ -29,10 +29,9 @@
 #include <list>
 
 
-extern double max_speed;
-extern std::vector<std::vector<std::pair<IntersectionIdx, StreetSegmentIdx>>> outgoingInfo;
-extern std::vector<LatLon> intersection_positions;
-extern std::vector<double> segment_travel_time;
+extern double max_speed; //The maximum speed allowed in a particular map
+extern std::vector<std::vector<std::pair<IntersectionIdx, StreetSegmentIdx>>> outgoingInfo; //The adjacent intersection array along with the street segments that reach there
+extern std::vector<double> segment_travel_time; //Store the travel time of street segments
 
 #endif /* GLOBAL_H */
 
