@@ -70,6 +70,8 @@ void onTyped(GtkEditable *editable, gpointer data);
 std::string trim(const std::string &s);
 void buildIntersectionStreetSegmentMap();
 void drawNavigatePOI();
+void drawInterest1(ezgl::renderer *g);
+void drawInterest2(ezgl::renderer *g);
 
 ezgl::point2d findLargestInscribedRectangle(FeatureIdx feature_id);
 std::string splitTextIntoLines(const std::string& text);
@@ -90,7 +92,6 @@ void closeHelpWindow(GtkWidget *, gpointer data);
 
 // draw the scale bar
 void drawScale(ezgl::renderer *g);
-
 struct Intersection{
     LatLon pos;
     std::string name;
@@ -98,15 +99,12 @@ struct Intersection{
 };
 
 void pre_load_road_data();
-
 void load_road_data();
 void load_poi_data();
 void draw_main_canvas(ezgl::renderer *g);
 void setInterface(ezgl::application &application);
 void load_street_names();
 void preloadFeatureDrawingOrder();
-
-
 
 // Stores road data as a vector of point sequences (each road is represented as a series of points)
 std::vector<std::vector<ezgl::point2d>> roads;  
@@ -138,6 +136,12 @@ std::vector<std::string> poiNames;
 
 // Stores all intersections in the map, including their name, location, and highlight status
 std::vector<Intersection> intersections;
+
+// first vector for the entry1 intersection
+std::vector<IntersectionIdx> searchIntersection1;
+
+// second vector for the entry2 intersection
+std::vector<IntersectionIdx> searchIntersection2;
 
 //Store all map names
 std::vector<std::string> mapOptions = {"Select Map:", "Beijing, China","Beirut, Lebanon", "Berlin, Germany", "Boston, USA", 
@@ -386,7 +390,8 @@ void button_clicked(GtkWidget *, gpointer data){
         }
         return results;
     };
-
+    searchIntersection1 = parseIntersection(input1);
+    searchIntersection2 = parseIntersection(input2);
     auto highlightInput = [](const std::string &input){
         std::vector<StreetIdx> ids = findStreetIdsFromPartialStreetName(input);
         for(StreetIdx id : ids){
@@ -423,10 +428,12 @@ void button_clicked(GtkWidget *, gpointer data){
             for(StreetIdx j: streetList2){
                 std::vector<IntersectionIdx> streetPOI = findIntersectionsOfTwoStreets({i, j});
                 if(!streetPOI.empty()){
+                    // auto-centering
                     showIntersection = streetPOI;
                     LatLon pos = getIntersectionPosition(showIntersection[0]);
                     ezgl::point2d centerPos(x_from_lon(pos.longitude()), y_from_lat(pos.latitude()));
                     ezgl::rectangle view(centerPos - ezgl::point2d(500, 500), centerPos + ezgl::point2d(500, 500));
+                    //displaying intersection information
                     std::stringstream ss;
                     ss << "Intersection of: " << input1 << " & " << input2 << "\n\n";
                     ss << "Latitude: " << pos.latitude() << "\nLongitude: " << pos.longitude();
@@ -499,7 +506,26 @@ void drawIntersect(ezgl::renderer *g){
     for(IntersectionIdx id: showIntersection){
         LatLon pos = getIntersectionPosition(id);
         ezgl::point2d intersectPos = {x_from_lon(pos.longitude()), y_from_lat(pos.latitude())};
-        g->fill_arc(intersectPos, 15.0, 0, 360);
+        g->fill_arc(intersectPos, 500/zoomLevel, 0, 360);
+    }
+}
+
+// first search intersection
+void drawInterest1(ezgl::renderer *g){
+    g -> set_color(ezgl::GREEN);
+    for(IntersectionIdx id: searchIntersection1){
+        LatLon pos = getIntersectionPosition(id);
+        ezgl::point2d intersectPos = {x_from_lon(pos.longitude()), y_from_lat(pos.latitude())};
+        g->fill_arc(intersectPos, 500/zoomLevel, 0, 360);
+    }
+}
+// second search intersection
+void drawInterest2(ezgl::renderer *g){
+    g -> set_color(ezgl::YELLOW);
+    for(IntersectionIdx id: searchIntersection2){
+        LatLon pos = getIntersectionPosition(id);
+        ezgl::point2d intersectPos = {x_from_lon(pos.longitude()), y_from_lat(pos.latitude())};
+        g->fill_arc(intersectPos, 500/zoomLevel, 0, 360);
     }
 }
 
@@ -525,7 +551,7 @@ void setUpShow(ezgl::application *app, bool /*unused*/){
     if(entry1){
         autoComplete(entry1, app);
         g_signal_connect(entry1, "changed", G_CALLBACK(onTyped), app);
-        g_signal_connect(entry1, "changed", G_CALLBACK(cleanHighlight), app);
+        g_signal_connect(entry1, "changed", G_CALLBACK(cleanHighlight), app); // clear out the street drawings when recall the input
     }
     if(entry2){
         autoComplete(entry2, app);
@@ -697,8 +723,8 @@ void StreetSelect(GtkComboBox *self, gpointer data) {
     std::string selection(streetSelect);
     g_free((void*)streetSelect);
     if (selection.empty()) return;
-
     highlightStreet.clear();
+    //iterate through all the street intersecting with the current input
     std::vector<StreetIdx> streetId = findStreetIdsFromPartialStreetName(selection);
     for (StreetIdx s : streetId) {
         for (StreetSegmentIdx i = 0; i < getNumStreetSegments(); i++) {
@@ -714,11 +740,8 @@ void StreetSelect(GtkComboBox *self, gpointer data) {
 gboolean on_match_selected(GtkEntryCompletion *completion, GtkTreeModel *model, GtkTreeIter *iter, gpointer data) {
     gchar *street_name;
     gtk_tree_model_get(model, iter, 0, &street_name, -1);
-
     if (street_name == nullptr) return FALSE;
-
     ezgl::application *app = static_cast<ezgl::application *>(data);
-
     highlightStreet.clear();
     std::vector<StreetIdx> streetId = findStreetIdsFromPartialStreetName(street_name);
     for (StreetIdx s : streetId) {
@@ -729,10 +752,9 @@ gboolean on_match_selected(GtkEntryCompletion *completion, GtkTreeModel *model, 
             }
         }
     }
-
     g_free(street_name);
     app->refresh_drawing();
-    return FALSE;  // Allow default handler to run
+    return FALSE;
 }
 
 // clearn the highlighted street when recall the search input
@@ -745,7 +767,7 @@ void cleanHighlight(GtkSearchEntry *entry, gpointer data){
     }
 }
 
-void onTyped(GtkEditable *editable, gpointer data){
+void onTyped(GtkEditable *editable, gpointer data) {
     ezgl::application *app = static_cast<ezgl::application *>(data);
     GtkEntry *entry = GTK_ENTRY(editable);
 
@@ -759,33 +781,28 @@ void onTyped(GtkEditable *editable, gpointer data){
     if (andSign != std::string::npos) {
         std::string street1 = trim(input.substr(0, andSign));
         auto street1_ids = findStreetIdsFromPartialStreetName(street1);
-        // need to parse through all the related intersection street segments give first street name
+        //find intersecting street with the first input
         std::set<std::string> suggestions;
-        for (StreetIdx s1: street1_ids) {
+        for (StreetIdx s1 : street1_ids) {
             auto intersecting = getIntersectStreets(getStreetName(s1));
             for (const std::string &s : intersecting) {
-                suggestions.insert(street1 + " & " + s);  
+                suggestions.insert(street1 + " & " + s);
             }
         }
-
-        // Autodisplay all the suggestions from the dropdown menu
         for (const std::string &s : suggestions) {
             gtk_list_store_append(store, &iter);
             gtk_list_store_set(store, &iter, 0, s.c_str(), -1);
         }
-
+        //enforce the display of autocompletion dropdown to prevent low level Gtk malfunction
         gtk_entry_completion_set_model(completion, GTK_TREE_MODEL(store));
         gtk_entry_completion_set_text_column(completion, 0);
         gtk_entry_completion_set_inline_completion(completion, TRUE);
         gtk_entry_completion_set_popup_completion(completion, TRUE);
         gtk_entry_completion_set_inline_selection(completion, TRUE);
         gtk_entry_set_completion(GTK_ENTRY(entry), completion);
-        gtk_editable_set_position(GTK_EDITABLE(entry), -1);  // helps force cursor redraw
-        gtk_entry_completion_complete(completion); // show dropdown
-
-    } 
-    else {
-        // User typing normally → full street name suggestions
+        gtk_editable_set_position(GTK_EDITABLE(entry), -1);
+        gtk_entry_completion_complete(completion);
+    } else {
         for (StreetIdx i = 0; i < getNumStreets(); ++i) {
             std::string name = getStreetName(i);
             if (name.find(input) != std::string::npos) {
@@ -793,29 +810,45 @@ void onTyped(GtkEditable *editable, gpointer data){
                 gtk_list_store_set(store, &iter, 0, name.c_str(), -1);
             }
         }
-
         gtk_entry_completion_set_model(completion, GTK_TREE_MODEL(store));
         gtk_entry_completion_set_text_column(completion, 0);
         gtk_entry_set_completion(GTK_ENTRY(entry), completion);
         gtk_entry_completion_complete(completion);
     }
 
-    if(andSign != std::string::npos){
+    // Intersection detection and POI update
+    if (andSign != std::string::npos) {
         std::string s1 = trim(input.substr(0, andSign));
         std::string s2 = trim(input.substr(andSign + 1));
         std::vector<StreetIdx> ids1 = findStreetIdsFromPartialStreetName(s1);
         std::vector<StreetIdx> ids2 = findStreetIdsFromPartialStreetName(s2);
+
         showIntersection.clear();
-        for(StreetIdx i: ids1){
-            for(StreetIdx j: ids2){
-                auto intersections = findIntersectionsOfTwoStreets({i, j});
-                showIntersection.insert(showIntersection.end(), intersections.begin(), intersections.begin());
+        for (StreetIdx i : ids1) {
+            for (StreetIdx j : ids2) {
+                auto result = findIntersectionsOfTwoStreets({i, j});
+                showIntersection.insert(showIntersection.end(), result.begin(), result.end());
+
+                if (!result.empty()) {
+                    GtkWidget *entry1 = GTK_WIDGET(app->get_object("street_1"));
+                    GtkWidget *entry2 = GTK_WIDGET(app->get_object("street_2"));
+                    if (GTK_WIDGET(entry) == entry1) {
+                        searchIntersection1.clear();
+                        searchIntersection1.push_back(result[0]);
+                    } else if (GTK_WIDGET(entry) == entry2) {
+                        searchIntersection2.clear();
+                        searchIntersection2.push_back(result[0]);
+                    }
+                    break;
+                }
             }
         }
+
         app->refresh_drawing();
     }
 }
 
+//helper function to split the intersection input into two seperate streets
 std::string trim(const std::string& str) {
     size_t first = str.find_first_not_of(" \t");
     if (first == std::string::npos) return "";
@@ -1038,6 +1071,8 @@ void draw_main_canvas(ezgl::renderer *g)
     drawFeatureNames(g);   
     drawRiverNames(g); 
     drawStreetNames(g);
+    drawInterest1(g);
+    drawInterest2(g);
     //drawScale(g);
 
     auto end_time = std::chrono::high_resolution_clock::now(); // 记录结束时间
