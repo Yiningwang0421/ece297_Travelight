@@ -184,6 +184,12 @@ std::vector<StreetSegmentIdx> currentPath;
 //The soreted vectors that has the features from the largest area to the least
 std::vector<FeatureIdx> sortedFeatureIndices;
 
+IntersectionIdx clickStart = -1;
+IntersectionIdx clickEnd = -1;
+bool readyToFindPath = false;
+double turn_penalty = 15.0; // 你可以调整这个值
+
+
 // Convert Latitude/Longitude to X/Y using Equirectangular Projection
 double x_from_lon(double lon) {
     return lon * kDegreeToRadian * kEarthRadiusInMeters * cos(avgLat * kDegreeToRadian);
@@ -443,11 +449,11 @@ void button_clicked(GtkWidget *, gpointer data){
 
 // function for drawing the intersections of the streets
 void drawIntersect(ezgl::renderer *g){
-    g -> set_color(ezgl::BLUE);
+    g -> set_color(255,0,0);
     for(IntersectionIdx id: showIntersection){
         LatLon pos = getIntersectionPosition(id);
         ezgl::point2d intersectPos = {x_from_lon(pos.longitude()), y_from_lat(pos.latitude())};
-        g->fill_arc(intersectPos, 15.0, 0, 360);
+        g->fill_arc(intersectPos, 500/zoomLevel, 0, 360);
     }
 }
 
@@ -948,22 +954,42 @@ void setInterface(ezgl::application &application) {
     application.add_canvas("MainCanvas", draw_main_canvas, initial_world);
 }
 
-// function of the reactions of the act on mouse click
-void act_on_mouse_click(ezgl::application* app, GdkEventButton* event, double x, double y){
+void act_on_mouse_click(ezgl::application* app, GdkEventButton* event, double x, double y) {
     LatLon pos = LatLon(lat_from_y(y), lon_from_x(x));
     int inter_id = findClosestIntersection(pos);
-    if(findDistanceBetweenTwoPoints(pos, getIntersectionPosition(inter_id)) < 500/zoomLevel){
-        if (!intersections[inter_id].highlight){
-            intersections[inter_id].highlight = true;
+    
+    if (findDistanceBetweenTwoPoints(pos, getIntersectionPosition(inter_id)) < 500 / zoomLevel) {
+        // Prevent unhighlighting an already selected intersection
+        if (clickStart == -1 && clickEnd == -1) {
+            // New path start: clear previous highlights
+            for (IntersectionIdx id : showIntersection) {
+                intersections[id].highlight = false;
+            }
+            showIntersection.clear();
 
-            // Display intersection name in the status message
+            clickStart = inter_id;
+            intersections[inter_id].highlight = true;
+            app->update_message("🚩 Start: " + getIntersectionName(clickStart));
+        } 
+        else if (clickStart != -1 && clickEnd == -1) {
+            // Prevent double-clicking the same point
+            if (inter_id == clickStart) return;
+
+            clickEnd = inter_id;
+            intersections[clickEnd].highlight = true;
+
+            currentPath = findPathBetweenIntersections(turn_penalty, {clickStart, clickEnd});
+            showIntersection = {clickStart, clickEnd};
+
             std::stringstream ss;
-            ss << "Intersection: "<<intersections[inter_id].name;
+            ss << "🚩  Start： " << getIntersectionName(clickStart)
+               << "  →  📍  End： " << getIntersectionName(clickEnd);
             app->update_message(ss.str());
+
+            clickStart = -1;
+            clickEnd = -1;
         }
-        else{
-            intersections[inter_id].highlight = false;
-        }
+
         app->refresh_drawing();
     }
 }
@@ -1448,8 +1474,8 @@ void preloadFeatureDrawingOrder() {
 void drawPath(ezgl::renderer *g) {
     if (currentPath.empty()) return;
 
-    g->set_line_width(5);  
-    g->set_color(ezgl::BLUE);  
+    g->set_line_width(3);  
+    g->set_color(0, 0, 0);  
 
     for (size_t i = 0; i < currentPath.size(); ++i) {
         StreetSegmentInfo seg = getStreetSegmentInfo(currentPath[i]);
