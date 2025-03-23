@@ -360,6 +360,9 @@ parking location and bike rental.</property>
                     <property name="position">1</property>
                   </packing>
                 </child>
+                <child>
+                  <placeholder/>
+                </child>
               </object>
               <packing>
                 <property name="index">-1</property>
