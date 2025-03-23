@@ -60,10 +60,9 @@ int getWayIndexFromOSMID(OSMID way_id);//get the correponding index from the nod
 //global variables for function usage
 std::vector<std::vector<StreetSegmentIdx>> intersection_street_segments;
 std::vector<std::vector<IntersectionIdx>> adjacent_street_segments;
-std::vector<std::vector<std::pair<IntersectionIdx, StreetSegmentIdx>>> outgoingInfo;
-std::vector<LatLon> intersection_positions;
-std::vector<double> segment_travel_time;
-double max_speed;
+std::vector<std::vector<std::pair<IntersectionIdx, StreetSegmentIdx>>> outgoingInfo; //Stores the outgoing intersections and street segments of a node
+std::vector<double> segment_travel_time; //Store the travel time of street segments
+double max_speed; //The maximum speed allowed in a map
 
 std::unordered_map<OSMID, std::unordered_map<std::string, std::string>> OSMvec;
 bool loadMap(std::string map_streets_database_filename) {
@@ -121,7 +120,6 @@ bool loadMap(std::string map_streets_database_filename) {
                 adjacent_street_segments[intersection_id].push_back(adjacent);
             }
         }
-        intersection_positions.push_back(getIntersectionPosition(intersection_id));
     }
     
     //OSM storing the value from the map into the osm nodes with the tag pair of the key and value
