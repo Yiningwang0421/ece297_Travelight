@@ -1603,44 +1603,78 @@ void preloadFeatureDrawingOrder() {
     }
 }
 
+std::string getTurnDirection(const ezgl::point2d &a, const ezgl::point2d &b, const ezgl::point2d &c) {
+    double v1x = b.x - a.x;
+    double v1y = b.y - a.y;
+    double v2x = c.x - b.x;
+    double v2y = c.y - b.y;
+
+    double cross = v1x * v2y - v1y * v2x;
+
+    double dot = v1x * v2x + v1y * v2y;
+    double norm1 = std::hypot(v1x, v1y);
+    double norm2 = std::hypot(v2x, v2y);
+    double angle_deg = std::acos(dot / (norm1 * norm2)) * 180.0 / M_PI;
+
+    if (angle_deg < 30.0) return "Straight";
+
+    return (cross > 0) ? "Left Turn" : "Right Turn";
+}
+
 void drawPath(ezgl::renderer *g) {
     if (currentPath.empty()) return;
 
     g->set_line_width(3);
 
-    for (StreetSegmentIdx segmentId : currentPath) {
+    for (size_t i = 0; i < currentPath.size(); ++i) {
+        StreetSegmentIdx segmentId = currentPath[i];
         StreetSegmentInfo seg = getStreetSegmentInfo(segmentId);
         std::vector<ezgl::point2d> points;
 
-        // From point
         LatLon fromLL = getIntersectionPosition(seg.from);
         points.push_back({x_from_lon(fromLL.longitude()), y_from_lat(fromLL.latitude())});
 
-        // Curve points
-        for (int i = 0; i < seg.numCurvePoints; ++i) {
-            LatLon curve = getStreetSegmentCurvePoint(segmentId, i);
+        for (int j = 0; j < seg.numCurvePoints; ++j) {
+            LatLon curve = getStreetSegmentCurvePoint(segmentId, j);
             points.push_back({x_from_lon(curve.longitude()), y_from_lat(curve.latitude())});
         }
 
-        // To point
         LatLon toLL = getIntersectionPosition(seg.to);
         points.push_back({x_from_lon(toLL.longitude()), y_from_lat(toLL.latitude())});
 
-        // Set color based on speed
+        // Speed coloring
         float speed = seg.speedLimit;
-         if (speed < 15) g->set_color(30, 144, 255);  // dodger blue
-        else if (speed < 30) g-> set_color(138, 43, 226);  // purple
-        else g->set_color(50, 205, 50); // lime green 
+        if (speed < 15) g->set_color(30, 144, 255);
+        else if (speed < 30) g->set_color(138, 43, 226);
+        else g->set_color(50, 205, 50);
 
-        for (size_t i = 0; i < points.size() - 1; ++i) {
-            g->draw_line(points[i], points[i + 1]);
+        for (size_t j = 0; j < points.size() - 1; ++j) {
+            g->draw_line(points[j], points[j + 1]);
+        }
+
+        if (i >= 1) {
+            StreetSegmentInfo prevSeg = getStreetSegmentInfo(currentPath[i - 1]);
+            
+                LatLon aLL = getIntersectionPosition(prevSeg.from);
+                LatLon bLL = getIntersectionPosition(prevSeg.to);
+                LatLon cLL = getIntersectionPosition(seg.to);
+
+                ezgl::point2d a(x_from_lon(aLL.longitude()), y_from_lat(aLL.latitude()));
+                ezgl::point2d b(x_from_lon(bLL.longitude()), y_from_lat(bLL.latitude()));
+                ezgl::point2d c(x_from_lon(cLL.longitude()), y_from_lat(cLL.latitude()));
+
+                std::string turn = getTurnDirection(a, b, c);
+                if (turn != "Straight") {
+                    std::cout << "➡️  " << turn << " at " << getIntersectionName(prevSeg.to) << std::endl;
+                }else{
+                    std::cout << "⬆️ " << "Going Forward " << " at " << getIntersectionName(prevSeg.to) << std::endl;
+                }
+                
+            
         }
     }
-    
-        drawPathArrows(g);
-    
-    
-    
+
+    drawPathArrows(g);
 }
 
 //This function is helped by chatgpt
@@ -1720,3 +1754,4 @@ void drawPathArrows(ezgl::renderer *g) {
         }
     }
 }
+
