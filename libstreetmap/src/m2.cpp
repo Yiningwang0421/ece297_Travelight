@@ -67,6 +67,8 @@ gboolean on_match_selected(GtkEntryCompletion *completion, GtkTreeModel *model, 
 std::vector<std::string> getIntersectStreets(const std::string &streetName);
 void cleanHighlight(GtkSearchEntry *entry, gpointer data);
 void onTyped(GtkEditable *editable, gpointer data);
+std::vector<IntersectionIdx> parseIntersection(const std::string &input);
+void highlightInput(const std::string &input);
 std::string trim(const std::string &s);
 void buildIntersectionStreetSegmentMap();
 void drawNavigatePOI();
@@ -371,41 +373,10 @@ void button_clicked(GtkWidget *, gpointer data){
     highlightStreet.clear();
     showIntersection.clear();
     // for each single intersection need to use the seperation to identify input
-    auto parseIntersection = [](const std::string &input) -> std::vector<IntersectionIdx> {
-        size_t amp = input.find('&');
-        if (amp == std::string::npos) return {};
-        std::string s1 = input.substr(0, amp);
-        std::string s2 = input.substr(amp + 1);
-        trim(s1); 
-        trim(s2);
-
-        std::vector<StreetIdx> ids1 = findStreetIdsFromPartialStreetName(s1);
-        std::vector<StreetIdx> ids2 = findStreetIdsFromPartialStreetName(s2);
-        std::vector<IntersectionIdx> results;
-        for (StreetIdx id1 : ids1) {
-            for (StreetIdx id2 : ids2) {
-                std::vector<IntersectionIdx> inters = findIntersectionsOfTwoStreets({id1, id2});
-                results.insert(results.end(), inters.begin(), inters.end());
-            }
-        }
-        return results;
-    };
     searchIntersection1 = parseIntersection(input1);
     searchIntersection2 = parseIntersection(input2);
-    auto highlightInput = [](const std::string &input){
-        std::vector<StreetIdx> ids = findStreetIdsFromPartialStreetName(input);
-        for(StreetIdx id : ids){
-            for(StreetSegmentIdx i = 0; i < getNumStreetSegments(); i++){
-                if(getStreetSegmentInfo(i).streetID == id){
-                    highlightStreet.push_back(i);
-                }
-            }
-        }
-    };
-
     bool input1IsIntersection = input1.find('&') != std::string::npos;
     bool input2IsIntersection = input2.find('&') != std::string::npos;
-
     std::vector<IntersectionIdx> srcList, dstList;
 
     if (input1IsIntersection){
@@ -473,10 +444,8 @@ void button_clicked(GtkWidget *, gpointer data){
             gtk_widget_destroy(dialog);
             return;
         }
-
         IntersectionIdx from = srcList[0];
         IntersectionIdx to = dstList[0];
-
         std::vector<StreetSegmentIdx> path = findPathBetweenIntersections(15.0, {from, to});
         if (path.empty()) {
             GtkWidget *dialog = gtk_message_dialog_new(
@@ -498,6 +467,38 @@ void button_clicked(GtkWidget *, gpointer data){
         app->change_canvas_world_coordinates("MainCanvas", view);
     }
     app->refresh_drawing();
+}
+
+// iterate through the intersecting input in searchbar
+std::vector<IntersectionIdx> parseIntersection(const std::string &input){
+    size_t amp = input.find('&');
+    if (amp == std::string::npos) return {};
+    std::string s1 = input.substr(0, amp);
+    std::string s2 = input.substr(amp + 1);
+    trim(s1); 
+    trim(s2);
+    std::vector<StreetIdx> ids1 = findStreetIdsFromPartialStreetName(s1);
+    std::vector<StreetIdx> ids2 = findStreetIdsFromPartialStreetName(s2);
+    std::vector<IntersectionIdx> results;
+    for (StreetIdx id1 : ids1) {
+        for (StreetIdx id2 : ids2) {
+            std::vector<IntersectionIdx> inters = findIntersectionsOfTwoStreets({id1, id2});
+            results.insert(results.end(), inters.begin(), inters.end());
+        }
+    }
+    return results;
+}
+
+// receive feedback from searching intersecting streets and add to highlighting segment vector
+void highlightInput(const std::string &input){
+    std::vector<StreetIdx> ids = findStreetIdsFromPartialStreetName(input);
+    for(StreetIdx id : ids){
+        for(StreetSegmentIdx i = 0; i < getNumStreetSegments(); i++){
+            if(getStreetSegmentInfo(i).streetID == id){
+                highlightStreet.push_back(i);
+            }
+        }
+    }
 }
 
 // function for drawing the intersections of the streets
