@@ -106,6 +106,7 @@ void draw_main_canvas(ezgl::renderer *g);
 void setInterface(ezgl::application &application);
 void load_street_names();
 void preloadFeatureDrawingOrder();
+void drawPathArrows(ezgl::renderer *g);
 
 
 
@@ -426,6 +427,8 @@ void button_clicked(GtkWidget *, gpointer data){
     }
     // If both entries are valid street names, autocenter the intersection
     if(!input1IsIntersection && !input2IsIntersection){
+        intersections.clear();
+        currentPath.clear();
         std::vector<StreetIdx> streetList1 = findStreetIdsFromPartialStreetName(input1);
         std::vector<StreetIdx> streetList2 = findStreetIdsFromPartialStreetName(input2);
         for(StreetIdx i: streetList1){
@@ -464,6 +467,9 @@ void button_clicked(GtkWidget *, gpointer data){
     }
     // If both entries are valid intersections, attempt pathfinding
     else if (input1IsIntersection && input2IsIntersection) {
+
+        intersections.clear();
+
         if (srcList.empty() || dstList.empty()) {
             GtkWidget *dialog = gtk_message_dialog_new(
                 GTK_WINDOW(gtk_widget_get_toplevel(GTK_WIDGET(app->get_object("MainWindow")))),
@@ -476,11 +482,19 @@ void button_clicked(GtkWidget *, gpointer data){
             return;
         }
 
+        // Clear previous intersection highlights 
+        for (IntersectionIdx id : showIntersection) {
+        intersections[id].highlight = false;
+        }
+        
+        showIntersection.clear();
+
+
         IntersectionIdx from = srcList[0];
         IntersectionIdx to = dstList[0];
 
-        std::vector<StreetSegmentIdx> path = findPathBetweenIntersections(15.0, {from, to});
-        if (path.empty()) {
+        currentPath = findPathBetweenIntersections(15.0, {from, to});
+        if (currentPath.empty()) {
             GtkWidget *dialog = gtk_message_dialog_new(
                 GTK_WINDOW(gtk_widget_get_toplevel(GTK_WIDGET(app->get_object("MainWindow")))),
                 GTK_DIALOG_MODAL, GTK_MESSAGE_INFO, GTK_BUTTONS_CLOSE,
@@ -491,8 +505,12 @@ void button_clicked(GtkWidget *, gpointer data){
             gtk_widget_destroy(dialog);
             return;
         }
-        // draw the current path on map
-        highlightStreet = path;
+
+        // Highlight and save the new intersections
+        intersections[from].highlight = true;
+        intersections[to].highlight = true;
+        showIntersection = {from, to};
+
         // center the map to the destination
         LatLon center = getIntersectionPosition(to);
         ezgl::point2d centerPt(x_from_lon(center.longitude()), y_from_lat(center.latitude()));
@@ -1012,7 +1030,6 @@ void loadIntersections(){
 // Draw main canvas
 void draw_main_canvas(ezgl::renderer *g)
 {
-    auto start_time = std::chrono::high_resolution_clock::now(); // 记录开始时间
 
 
     if(nightmode == true){
@@ -1030,7 +1047,6 @@ void draw_main_canvas(ezgl::renderer *g)
 
 
     drawFeatures(g);
-    drawRoads(g);
     drawOneWayArrows(g);
 
     if(!showIntersection.empty()){
@@ -1066,6 +1082,9 @@ void act_on_mouse_click(ezgl::application* app, GdkEventButton* event, double x,
     int inter_id = findClosestIntersection(pos);
     
     if (findDistanceBetweenTwoPoints(pos, getIntersectionPosition(inter_id)) < 500 / zoomLevel) {
+        
+        currentPath.clear();
+
         // Prevent unhighlighting an already selected intersection
         if (clickStart == -1 && clickEnd == -1) {
             // New path start: clear previous highlights
@@ -1073,9 +1092,11 @@ void act_on_mouse_click(ezgl::application* app, GdkEventButton* event, double x,
                 intersections[id].highlight = false;
             }
             showIntersection.clear();
+            
 
             clickStart = inter_id;
             intersections[inter_id].highlight = true;
+            showIntersection.push_back(clickStart);
             app->update_message("🚩 Start: " + getIntersectionName(clickStart));
         } 
         else if (clickStart != -1 && clickEnd == -1) {
@@ -1200,14 +1221,14 @@ void drawRoads(ezgl::renderer *g) {
         if (zoomLevel < 4 && ((roadType == 1)||(roadType == 0))) continue;  // Hide secondary roads
         if (zoomLevel < 30 && roadType == 0) continue;  // Hide main roads
         
-        //show the highlight  street
+        /*//show the highlight  street
         bool  streetHighlight = (std::find(highlightStreet.begin(), highlightStreet.end(), segmentId) != highlightStreet.end());
 
         // Set road color & width
         if(streetHighlight){
             g->set_color(ezgl::BLUE);
-            g->set_line_width(5);
-        }
+            g->set_line_width(3);
+        }*/
         else{ // draw regular roads
             if(nightmode == false){
                 if (roadType == 3) {
@@ -1239,7 +1260,6 @@ void drawRoads(ezgl::renderer *g) {
         LatLon end = getIntersectionPosition(segInfo.to);
         ezgl::point2d startPt(x_from_lon(start.longitude()), y_from_lat(start.latitude()));
         ezgl::point2d endPt(x_from_lon(end.longitude()), y_from_lat(end.latitude()));
-        g->draw_line(startPt, endPt);
         for(int i = 0; i < segInfo.numCurvePoints; i++){
             LatLon curvePt = getStreetSegmentCurvePoint(segmentId, i);
             ezgl::point2d curvePoint(x_from_lon(curvePt.longitude()), y_from_lat(curvePt.latitude()));
@@ -1583,19 +1603,117 @@ void preloadFeatureDrawingOrder() {
 void drawPath(ezgl::renderer *g) {
     if (currentPath.empty()) return;
 
-    g->set_line_width(3);  
-    g->set_color(0, 0, 0);  
+    g->set_line_width(3);
 
-    for (size_t i = 0; i < currentPath.size(); ++i) {
-        StreetSegmentInfo seg = getStreetSegmentInfo(currentPath[i]);
+    for (StreetSegmentIdx segmentId : currentPath) {
+        StreetSegmentInfo seg = getStreetSegmentInfo(segmentId);
+        std::vector<ezgl::point2d> points;
 
-        LatLon from = getIntersectionPosition(seg.from);
-        LatLon to = getIntersectionPosition(seg.to);
+        // From point
+        LatLon fromLL = getIntersectionPosition(seg.from);
+        points.push_back({x_from_lon(fromLL.longitude()), y_from_lat(fromLL.latitude())});
 
-        ezgl::point2d p1(x_from_lon(from.longitude()), y_from_lat(from.latitude()));
-        ezgl::point2d p2(x_from_lon(to.longitude()), y_from_lat(to.latitude()));
+        // Curve points
+        for (int i = 0; i < seg.numCurvePoints; ++i) {
+            LatLon curve = getStreetSegmentCurvePoint(segmentId, i);
+            points.push_back({x_from_lon(curve.longitude()), y_from_lat(curve.latitude())});
+        }
 
-        g->draw_line(p1, p2);
+        // To point
+        LatLon toLL = getIntersectionPosition(seg.to);
+        points.push_back({x_from_lon(toLL.longitude()), y_from_lat(toLL.latitude())});
+
+        // Set color based on speed
+        float speed = seg.speedLimit;
+         if (speed < 15) g->set_color(30, 144, 255);  // dodger blue
+        else if (speed < 30) g-> set_color(138, 43, 226);  // purple
+        else g->set_color(50, 205, 50); // lime green 
+
+        for (size_t i = 0; i < points.size() - 1; ++i) {
+            g->draw_line(points[i], points[i + 1]);
+        }
     }
+    
+        drawPathArrows(g);
+    
+    
+    
 }
 
+//This function is helped by chatgpt
+std::vector<ezgl::point2d> getSegmentPolyline(StreetSegmentIdx segmentId, bool forward) {
+    StreetSegmentInfo seg = getStreetSegmentInfo(segmentId);
+    std::vector<ezgl::point2d> points;
+
+    LatLon from = getIntersectionPosition(seg.from);
+    LatLon to = getIntersectionPosition(seg.to);
+
+    if (forward) {
+        points.push_back({x_from_lon(from.longitude()), y_from_lat(from.latitude())});
+        for (int i = 0; i < seg.numCurvePoints; ++i) {
+            LatLon curve = getStreetSegmentCurvePoint(segmentId, i);
+            points.push_back({x_from_lon(curve.longitude()), y_from_lat(curve.latitude())});
+        }
+        points.push_back({x_from_lon(to.longitude()), y_from_lat(to.latitude())});
+    } else {
+        points.push_back({x_from_lon(to.longitude()), y_from_lat(to.latitude())});
+        for (int i = seg.numCurvePoints - 1; i >= 0; --i) {
+            LatLon curve = getStreetSegmentCurvePoint(segmentId, i);
+            points.push_back({x_from_lon(curve.longitude()), y_from_lat(curve.latitude())});
+        }
+        points.push_back({x_from_lon(from.longitude()), y_from_lat(from.latitude())});
+    }
+
+    return points;
+}
+
+void drawArrow(ezgl::renderer *g, const ezgl::point2d& p1, const ezgl::point2d& p2) {
+    double dx = p2.x - p1.x, dy = p2.y - p1.y;
+    double norm = std::sqrt(dx * dx + dy * dy);
+    if (norm < 1e-5) return;
+
+    double ux = dx / norm, uy = dy / norm;
+    double arrowLen = 1200.0 / zoomLevel;
+    double arrowWidth = 750.0 / zoomLevel;
+
+    ezgl::point2d mid((p1.x + p2.x) / 2, (p1.y + p2.y) / 2);
+    ezgl::point2d tip(mid.x + ux * arrowLen, mid.y + uy * arrowLen);
+    ezgl::point2d left(mid.x - uy * arrowWidth, mid.y + ux * arrowWidth);
+    ezgl::point2d right(mid.x + uy * arrowWidth, mid.y - ux * arrowWidth);
+
+    g->fill_poly({left, tip, right});
+}
+
+void drawPathArrows(ezgl::renderer *g) {
+    if (currentPath.empty()) return;
+
+    g->set_color(0, 0, 0);  // arrows are black
+    double arrowSpacing = 15000.0; // meters
+    double accumulatedDist = 0.0;
+
+    for (size_t idx = 0; idx < currentPath.size(); ++idx) {
+        StreetSegmentIdx segmentId = currentPath[idx];
+        bool forward = true;
+
+        // Determine actual direction
+        if (idx > 0) {
+            StreetSegmentInfo prev = getStreetSegmentInfo(currentPath[idx - 1]);
+            StreetSegmentInfo curr = getStreetSegmentInfo(segmentId);
+            if (prev.to == curr.to || prev.from == curr.to)
+                forward = false;
+        }
+
+        std::vector<ezgl::point2d> polyline = getSegmentPolyline(segmentId, forward);
+
+        for (size_t i = 0; i + 1 < polyline.size(); ++i) {
+            ezgl::point2d p1 = polyline[i], p2 = polyline[i + 1];
+            double len = std::hypot(p2.x - p1.x, p2.y - p1.y);
+            accumulatedDist += len;
+
+            if (accumulatedDist >= arrowSpacing / zoomLevel) {
+                accumulatedDist = 0;
+                drawArrow(g, p1, p2);
+            }
+        }
+    }
+}
