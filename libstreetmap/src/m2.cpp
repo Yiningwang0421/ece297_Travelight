@@ -469,6 +469,7 @@ void button_clicked(GtkWidget *, gpointer data){
     else if (input1IsIntersection && input2IsIntersection) {
 
         intersections.clear();
+        highlightStreet.clear();
 
         if (srcList.empty() || dstList.empty()) {
             GtkWidget *dialog = gtk_message_dialog_new(
@@ -1082,6 +1083,7 @@ void act_on_mouse_click(ezgl::application* app, GdkEventButton* event, double x,
     int inter_id = findClosestIntersection(pos);
     
     if (findDistanceBetweenTwoPoints(pos, getIntersectionPosition(inter_id)) < 500 / zoomLevel) {
+        highlightStreet.clear();
         
         currentPath.clear();
 
@@ -1221,14 +1223,15 @@ void drawRoads(ezgl::renderer *g) {
         if (zoomLevel < 4 && ((roadType == 1)||(roadType == 0))) continue;  // Hide secondary roads
         if (zoomLevel < 30 && roadType == 0) continue;  // Hide main roads
         
-        /*//show the highlight  street
+        //show the highlight  street
         bool  streetHighlight = (std::find(highlightStreet.begin(), highlightStreet.end(), segmentId) != highlightStreet.end());
 
         // Set road color & width
         if(streetHighlight){
             g->set_color(ezgl::BLUE);
             g->set_line_width(3);
-        }*/
+        }
+
         else{ // draw regular roads
             if(nightmode == false){
                 if (roadType == 3) {
