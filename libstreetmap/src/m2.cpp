@@ -107,7 +107,7 @@ void setInterface(ezgl::application &application);
 void load_street_names();
 void preloadFeatureDrawingOrder();
 void drawPathArrows(ezgl::renderer *g);
-
+void printTurnMessageIfAny();
 
 
 // Stores road data as a vector of point sequences (each road is represented as a series of points)
@@ -1066,6 +1066,7 @@ void draw_main_canvas(ezgl::renderer *g)
     drawStreetNames(g);
     //drawScale(g);
     drawPath(g);
+    printTurnMessageIfAny();
 }
 
 // Set Initial View Using LatLon Bounds
@@ -1603,23 +1604,6 @@ void preloadFeatureDrawingOrder() {
     }
 }
 
-std::string getTurnDirection(const ezgl::point2d &a, const ezgl::point2d &b, const ezgl::point2d &c) {
-    double v1x = b.x - a.x;
-    double v1y = b.y - a.y;
-    double v2x = c.x - b.x;
-    double v2y = c.y - b.y;
-
-    double cross = v1x * v2y - v1y * v2x;
-
-    double dot = v1x * v2x + v1y * v2y;
-    double norm1 = std::hypot(v1x, v1y);
-    double norm2 = std::hypot(v2x, v2y);
-    double angle_deg = std::acos(dot / (norm1 * norm2)) * 180.0 / M_PI;
-
-    if (angle_deg < 30.0) return "Straight";
-
-    return (cross > 0) ? "Left Turn" : "Right Turn";
-}
 
 void drawPath(ezgl::renderer *g) {
     if (currentPath.empty()) return;
@@ -1651,29 +1635,7 @@ void drawPath(ezgl::renderer *g) {
         for (size_t j = 0; j < points.size() - 1; ++j) {
             g->draw_line(points[j], points[j + 1]);
         }
-
-        if (i >= 1) {
-            StreetSegmentInfo prevSeg = getStreetSegmentInfo(currentPath[i - 1]);
-            
-                LatLon aLL = getIntersectionPosition(prevSeg.from);
-                LatLon bLL = getIntersectionPosition(prevSeg.to);
-                LatLon cLL = getIntersectionPosition(seg.to);
-
-                ezgl::point2d a(x_from_lon(aLL.longitude()), y_from_lat(aLL.latitude()));
-                ezgl::point2d b(x_from_lon(bLL.longitude()), y_from_lat(bLL.latitude()));
-                ezgl::point2d c(x_from_lon(cLL.longitude()), y_from_lat(cLL.latitude()));
-
-                std::string turn = getTurnDirection(a, b, c);
-                if (turn != "Straight") {
-                    std::cout << "➡️  " << turn << " at " << getIntersectionName(prevSeg.to) << std::endl;
-                }else{
-                    std::cout << "⬆️ " << "Going Forward " << " at " << getIntersectionName(prevSeg.to) << std::endl;
-                }
-                
-            
-        }
     }
-
     drawPathArrows(g);
 }
 
@@ -1739,6 +1701,8 @@ void drawPathArrows(ezgl::renderer *g) {
             if (prev.to == curr.to || prev.from == curr.to)
                 forward = false;
         }
+        
+        
 
         std::vector<ezgl::point2d> polyline = getSegmentPolyline(segmentId, forward);
 
@@ -1755,3 +1719,47 @@ void drawPathArrows(ezgl::renderer *g) {
     }
 }
 
+void printTurnMessageIfAny() {
+    for (size_t i = 1; i < currentPath.size(); ++i) {
+        StreetSegmentInfo prevSeg = getStreetSegmentInfo(currentPath[i - 1]);
+        StreetSegmentInfo currSeg = getStreetSegmentInfo(currentPath[i]);
+
+
+
+        double angle = findStreetSegmentTurnAngle(i - 1, i);
+        if (angle == NO_ANGLE) continue;
+
+        double angle_deg = angle * 180.0 / M_PI;
+        std::string turn;
+
+        if (angle_deg > 30 && angle_deg < 150) {
+            if (angle_deg < 90)
+                turn = "⬅️  Left Turn";
+            else
+                turn = "➡️  Right Turn";
+        } else {
+            turn = "⬆️  Forward at ";
+        }
+
+        // Find the junction (common intersection)
+        IntersectionIdx junction;
+
+        if (prevSeg.to == currSeg.from)
+        {
+            junction = prevSeg.to;
+        }else if (prevSeg.to == currSeg.to)
+        {
+            junction = prevSeg.to;
+        }else if (prevSeg.from == currSeg.from)
+        {
+            junction = prevSeg.from;
+        }else if (prevSeg.from == currSeg.to)
+        {
+            junction = prevSeg.from;
+        }
+        
+
+        std::string interName = getIntersectionName(junction);
+        std::cout << turn << " at " << interName << std::endl;
+    }
+}
