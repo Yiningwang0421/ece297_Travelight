@@ -258,7 +258,7 @@ parking location and bike rental.</property>
                 <child>
                   <object class="GtkScrolledWindow" id="turn_scroll">
                     <property name="visible">true</property>
-                    <property name="height-request">200</property>
+                    <property name="height-request">240</property>
                     <child>
                       <object class="GtkTextView" id="turn_textview">
                         <property name="visible">true</property>
@@ -273,6 +273,25 @@ parking location and bike rental.</property>
                     <property name="top-attach">12</property>
                     <property name="width">3</property>
                     </packing>
+                </child>
+                <child>
+                  <object class="GtkLabel" id="SpeedLegendLabel">
+                    <property name="visible">True</property>
+                    <property name="can-focus">False</property>
+                    <property name="label" translatable="yes">
+🟦 &lt; 30 km/h
+🟪 30–60 km/h
+🟩 &gt; 60 km/h</property>
+                    <property name="justify">left</property>
+                    <attributes>
+                      <attribute name="font-desc" value="Monospace 10"/>
+                    </attributes>
+                  </object>
+                  <packing>
+                    <property name="left-attach">0</property>
+                    <property name="top-attach">13</property>
+                    <property name="width">3</property>
+                  </packing>
                 </child>
                 <child>
                   <object class="GtkButton" id="UpButton">

@@ -188,13 +188,11 @@ std::vector<StreetSegmentIdx> currentPath;
 //The soreted vectors that has the features from the largest area to the least
 std::vector<FeatureIdx> sortedFeatureIndices;
 
-IntersectionIdx clickStart = -1;
-IntersectionIdx clickEnd = -1;
-IntersectionIdx inter1 = -1;
-IntersectionIdx inter2 = -1;
-bool readyToFindPath = false;
-double turn_penalty = 15.0;
+IntersectionIdx clickStart = -1;    // The intersection selected as the path start 
+IntersectionIdx clickEnd = -1;      // The intersection selected as the path end 
 
+bool readyToFindPath = false;       // Flag indicating if both intersections have been selected for pathfinding
+double turn_penalty = 15.0;         // Turn penalty in seconds applied during pathfinding
 
 // Convert Latitude/Longitude to X/Y using Equirectangular Projection
 double x_from_lon(double lon) {
@@ -1079,6 +1077,8 @@ void setInterface(ezgl::application &application) {
     application.add_canvas("MainCanvas", draw_main_canvas, initial_world);
 }
 
+// It processes the click to identify and highlight intersections,
+// and initiates pathfinding when two valid intersections are selected.
 void act_on_mouse_click(ezgl::application* app, GdkEventButton* event, double x, double y) {
     LatLon pos = LatLon(lat_from_y(y), lon_from_x(x));
     int inter_id = findClosestIntersection(pos);
@@ -1612,7 +1612,8 @@ void preloadFeatureDrawingOrder() {
     }
 }
 
-
+// Draws the computed path on the map using colored segments based on speed limits.
+// Also renders directional arrows along the path.
 void drawPath(ezgl::renderer *g) {
     if (currentPath.empty()) return;
 
@@ -1622,10 +1623,12 @@ void drawPath(ezgl::renderer *g) {
         StreetSegmentIdx segmentId = currentPath[i];
         StreetSegmentInfo seg = getStreetSegmentInfo(segmentId);
         std::vector<ezgl::point2d> points;
-
+        
+        //set the vector for drawing
         LatLon fromLL = getIntersectionPosition(seg.from);
         points.push_back({x_from_lon(fromLL.longitude()), y_from_lat(fromLL.latitude())});
-
+        
+        //Go through all the curve points
         for (int j = 0; j < seg.numCurvePoints; ++j) {
             LatLon curve = getStreetSegmentCurvePoint(segmentId, j);
             points.push_back({x_from_lon(curve.longitude()), y_from_lat(curve.latitude())});
@@ -1647,7 +1650,9 @@ void drawPath(ezgl::renderer *g) {
     drawPathArrows(g);
 }
 
-//This function is helped by chatgpt
+// Returns the polyline (set of 2D points) representing the street segment.
+// The points are ordered in the direction of travel: forward or reverse.
+// This function is helped by chatgpt
 std::vector<ezgl::point2d> getSegmentPolyline(StreetSegmentIdx segmentId, bool forward) {
     StreetSegmentInfo seg = getStreetSegmentInfo(segmentId);
     std::vector<ezgl::point2d> points;
@@ -1656,6 +1661,7 @@ std::vector<ezgl::point2d> getSegmentPolyline(StreetSegmentIdx segmentId, bool f
     LatLon to = getIntersectionPosition(seg.to);
 
     if (forward) {
+        // Start from the 'from' intersection
         points.push_back({x_from_lon(from.longitude()), y_from_lat(from.latitude())});
         for (int i = 0; i < seg.numCurvePoints; ++i) {
             LatLon curve = getStreetSegmentCurvePoint(segmentId, i);
@@ -1663,6 +1669,7 @@ std::vector<ezgl::point2d> getSegmentPolyline(StreetSegmentIdx segmentId, bool f
         }
         points.push_back({x_from_lon(to.longitude()), y_from_lat(to.latitude())});
     } else {
+        // Start from the 'to' intersection (reverse direction)
         points.push_back({x_from_lon(to.longitude()), y_from_lat(to.latitude())});
         for (int i = seg.numCurvePoints - 1; i >= 0; --i) {
             LatLon curve = getStreetSegmentCurvePoint(segmentId, i);
@@ -1674,6 +1681,8 @@ std::vector<ezgl::point2d> getSegmentPolyline(StreetSegmentIdx segmentId, bool f
     return points;
 }
 
+// Draws a directional arrow from point p1 to point p2 using a filled triangle.
+// The arrow indicates travel direction along the path segment.
 void drawArrow(ezgl::renderer *g, const ezgl::point2d& p1, const ezgl::point2d& p2) {
     double dx = p2.x - p1.x, dy = p2.y - p1.y;
     double norm = std::sqrt(dx * dx + dy * dy);
@@ -1691,6 +1700,8 @@ void drawArrow(ezgl::renderer *g, const ezgl::point2d& p1, const ezgl::point2d& 
     g->fill_poly({left, tip, right});
 }
 
+// Draws directional arrows along each street segment in the current path.
+// Arrows indicate travel direction and are spaced based on distance.
 void drawPathArrows(ezgl::renderer *g) {
     if (currentPath.empty()) return;
 
@@ -1713,7 +1724,7 @@ void drawPathArrows(ezgl::renderer *g) {
         
 
         std::vector<ezgl::point2d> polyline = getSegmentPolyline(segmentId, forward);
-
+        //calculate the accumulated distance
         for (size_t i = 0; i + 1 < polyline.size(); ++i) {
             ezgl::point2d p1 = polyline[i], p2 = polyline[i + 1];
             double len = std::hypot(p2.x - p1.x, p2.y - p1.y);
@@ -1727,6 +1738,9 @@ void drawPathArrows(ezgl::renderer *g) {
     }
 }
 
+// Prints turn-by-turn navigation messages for the current path.
+// For each change in street name, it determines the direction of the turn
+// (left, right, or forward) and displays the message in the console and GUI.
 void printTurnMessageIfAny(ezgl::application* app) {
     if (currentPath.size() < 2) return;
 
@@ -1768,6 +1782,8 @@ void printTurnMessageIfAny(ezgl::application* app) {
     gtk_text_buffer_set_text(buffer, ss.str().c_str(), -1);
 }
 
+// Checks if a valid path exists in currentPath.
+// If not, displays a GTK dialog informing the user that no path was found.
 bool checkPath(ezgl::application* app) {
     if (currentPath.empty()) {
         GtkWidget *dialog = gtk_message_dialog_new(
@@ -1783,3 +1799,4 @@ bool checkPath(ezgl::application* app) {
         return true;
     }
 }
+
