@@ -828,8 +828,8 @@ void onTyped(GtkEditable *editable, gpointer data){
         showIntersection.clear();
         for(StreetIdx i: ids1){
             for(StreetIdx j: ids2){
-                auto intersections = findIntersectionsOfTwoStreets({i, j});
-                showIntersection.insert(showIntersection.end(), intersections.begin(), intersections.begin());
+                auto intersectionsofStreets = findIntersectionsOfTwoStreets({i, j});
+                showIntersection.insert(showIntersection.end(), intersectionsofStreets.begin(), intersectionsofStreets.begin());
             }
         }
         app->refresh_drawing();
