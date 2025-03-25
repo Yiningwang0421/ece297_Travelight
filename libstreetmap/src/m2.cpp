@@ -579,19 +579,19 @@ void setUpShow(ezgl::application *app, bool /*unused*/){
     //std::cout << "detected the showstreetname button" << std::endl;
 
     GtkWidget *showBuildingButton = GTK_WIDGET(app -> get_object("showbuilding"));
-    g_signal_connect(streetnameButton, "clicked", G_CALLBACK(showBuildings), app);
+    g_signal_connect(showBuildingButton, "clicked", G_CALLBACK(showBuildings), app);
     //std::cout << "detected the showstreetname button" << std::endl;
 
     GtkWidget *showBuildingnameButton = GTK_WIDGET(app -> get_object("showbuildingname"));
-    g_signal_connect(streetnameButton, "clicked", G_CALLBACK(showBuildingnames), app);
+    g_signal_connect(showBuildingnameButton, "clicked", G_CALLBACK(showBuildingnames), app);
     //std::cout << "detected the showstreetname button" << std::endl;
 
     GtkWidget *showDirectionButton = GTK_WIDGET(app -> get_object("showdirection"));
-    g_signal_connect(streetnameButton, "clicked", G_CALLBACK(showDirections), app);
+    g_signal_connect(showDirectionButton, "clicked", G_CALLBACK(showDirections), app);
     //std::cout << "detected the showstreetname button" << std::endl;
 
     GtkWidget *showPOIButton = GTK_WIDGET(app -> get_object("showPOI"));
-    g_signal_connect(streetnameButton, "clicked", G_CALLBACK(showPOIS), app);
+    g_signal_connect(showPOIButton, "clicked", G_CALLBACK(showPOIS), app);
     //std::cout << "detected the showstreetname button" << std::endl;
     
     GtkWidget *helpButton =  GTK_WIDGET(app -> get_object("HelpButton"));
@@ -729,7 +729,7 @@ void StreetSelect(GtkComboBox *self, gpointer data) {
     if (streetSelect == nullptr) return;
 
     std::string selection(streetSelect);
-    g_free((void*)streetSelect);
+    g_free(const_cast<gchar *> (streetSelect));
     if (selection.empty()) return;
 
     highlightStreet.clear();
