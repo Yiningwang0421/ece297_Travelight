@@ -107,7 +107,8 @@ void setInterface(ezgl::application &application);
 void load_street_names();
 void preloadFeatureDrawingOrder();
 void drawPathArrows(ezgl::renderer *g);
-void printTurnMessageIfAny();
+void printTurnMessageIfAny(ezgl::application* app);
+bool checkPath(ezgl::application* app);
 
 
 // Stores road data as a vector of point sequences (each road is represented as a series of points)
@@ -455,15 +456,13 @@ void button_clicked(GtkWidget *, gpointer data){
             }
         }
         //if nothing found, show error
-        GtkWidget *dialog = gtk_message_dialog_new(
-                GTK_WINDOW(gtk_widget_get_toplevel(GTK_WIDGET(app->get_object("MainWindow")))),
-                GTK_DIALOG_MODAL, GTK_MESSAGE_ERROR, GTK_BUTTONS_CLOSE,
-                "No Intersection Between Two Streets."
-            );
-        gtk_window_set_title(GTK_WINDOW(dialog), "Invalid Input");
-        gtk_dialog_run(GTK_DIALOG(dialog));
-        gtk_widget_destroy(dialog);
-        return;
+        if (!checkPath(app))
+            {
+            highlightStreet.clear();
+            currentPath.clear();
+            showIntersection.clear();
+            return;
+            }
     }
     // If both entries are valid intersections, attempt pathfinding
     else if (input1IsIntersection && input2IsIntersection) {
@@ -495,6 +494,8 @@ void button_clicked(GtkWidget *, gpointer data){
         IntersectionIdx to = dstList[0];
 
         currentPath = findPathBetweenIntersections(15.0, {from, to});
+        printTurnMessageIfAny(app);
+
         if (currentPath.empty()) {
             GtkWidget *dialog = gtk_message_dialog_new(
                 GTK_WINDOW(gtk_widget_get_toplevel(GTK_WIDGET(app->get_object("MainWindow")))),
@@ -1066,7 +1067,6 @@ void draw_main_canvas(ezgl::renderer *g)
     drawStreetNames(g);
     //drawScale(g);
     drawPath(g);
-    printTurnMessageIfAny();
 }
 
 // Set Initial View Using LatLon Bounds
@@ -1108,19 +1108,27 @@ void act_on_mouse_click(ezgl::application* app, GdkEventButton* event, double x,
 
             clickEnd = inter_id;
             intersections[clickEnd].highlight = true;
-
-            currentPath = findPathBetweenIntersections(turn_penalty, {clickStart, clickEnd});
+            
             showIntersection = {clickStart, clickEnd};
-
             std::stringstream ss;
             ss << "🚩  Start： " << getIntersectionName(clickStart)
                << "  →  📍  End： " << getIntersectionName(clickEnd);
+            currentPath = findPathBetweenIntersections(turn_penalty, {clickStart, clickEnd});
+
+             if (!checkPath(app))
+            {
+            highlightStreet.clear();
+            currentPath.clear();
+            showIntersection.clear();
+            return;
+            }
+
             app->update_message(ss.str());
 
             clickStart = -1;
             clickEnd = -1;
         }
-
+        printTurnMessageIfAny(app);
         app->refresh_drawing();
     }
 }
@@ -1719,12 +1727,14 @@ void drawPathArrows(ezgl::renderer *g) {
     }
 }
 
-void printTurnMessageIfAny() {
+void printTurnMessageIfAny(ezgl::application* app) {
+    if (currentPath.size() < 2) return;
+
+    std::stringstream ss;
+
     for (size_t i = 1; i < currentPath.size(); ++i) {
         StreetSegmentInfo prevSeg = getStreetSegmentInfo(currentPath[i - 1]);
         StreetSegmentInfo currSeg = getStreetSegmentInfo(currentPath[i]);
-
-
 
         double angle = findStreetSegmentTurnAngle(i - 1, i);
         if (angle == NO_ANGLE) continue;
@@ -1738,28 +1748,38 @@ void printTurnMessageIfAny() {
             else
                 turn = "➡️  Right Turn";
         } else {
-            turn = "⬆️  Forward at ";
+            turn = "⬆️  Forward";
         }
 
         // Find the junction (common intersection)
         IntersectionIdx junction;
-
-        if (prevSeg.to == currSeg.from)
-        {
+        if (prevSeg.to == currSeg.from || prevSeg.to == currSeg.to)
             junction = prevSeg.to;
-        }else if (prevSeg.to == currSeg.to)
-        {
-            junction = prevSeg.to;
-        }else if (prevSeg.from == currSeg.from)
-        {
+        else
             junction = prevSeg.from;
-        }else if (prevSeg.from == currSeg.to)
-        {
-            junction = prevSeg.from;
-        }
-        
 
         std::string interName = getIntersectionName(junction);
-        std::cout << turn << " at " << interName << std::endl;
+        ss << turn << " at " << interName << "\n";
+    }
+
+    // upload into GtkTextView
+    GtkTextView* textview = GTK_TEXT_VIEW(app->get_object("turn_textview"));
+    GtkTextBuffer* buffer = gtk_text_view_get_buffer(textview);
+    gtk_text_buffer_set_text(buffer, ss.str().c_str(), -1);
+}
+
+bool checkPath(ezgl::application* app) {
+    if (currentPath.empty()) {
+        GtkWidget *dialog = gtk_message_dialog_new(
+            GTK_WINDOW(gtk_widget_get_toplevel(GTK_WIDGET(app->get_object("MainWindow")))),
+            GTK_DIALOG_MODAL, GTK_MESSAGE_INFO, GTK_BUTTONS_CLOSE,
+            "No path found between the two intersections."
+        );
+        gtk_window_set_title(GTK_WINDOW(dialog), "No Path");
+        gtk_dialog_run(GTK_DIALOG(dialog));
+        gtk_widget_destroy(dialog);
+        return false;
+    } else {
+        return true;
     }
 }
