@@ -64,7 +64,7 @@ void switchMap(GtkComboBoxText* self, ezgl::application* app);
 void nightMode(ezgl::application *app, bool /*Window*/);
 gboolean night_switch(GtkSwitch *, gboolean switch_state, ezgl::application *app);
 void StreetSelect(GtkComboBox *self, gpointer data);
-gboolean on_match_selected(GtkEntryCompletion * /*Completion*/, GtkTreeModel *model, GtkTreeIter *iter, gpointer data);
+gboolean on_match_selected(GtkEntryCompletion *completion, GtkTreeModel *model, GtkTreeIter *iter, gpointer data);
 std::vector<std::string> getIntersectStreets(const std::string &streetName);
 void cleanHighlight(GtkSearchEntry *entry, gpointer data);
 void onTyped(GtkEditable *editable, gpointer data);
@@ -461,7 +461,6 @@ void button_clicked(GtkWidget *, gpointer data){
             highlightStreet.clear();
             currentPath.clear();
             showIntersection.clear();
-            return;
             }
     }
     // If both entries are valid intersections, attempt pathfinding
@@ -541,6 +540,9 @@ void setUpShow(ezgl::application *app, bool /*unused*/){
     GtkSearchEntry *entry1 = GTK_SEARCH_ENTRY(app -> get_object("street_1"));
     GtkSearchEntry *entry2 = GTK_SEARCH_ENTRY(app -> get_object("street_2"));
     GtkWidget *findButton = GTK_WIDGET(app -> get_object("find_button"));
+    // highlight selected street:
+    GtkComboBox *selectS1 = GTK_COMBO_BOX(app->get_object("street1"));
+    GtkComboBox *selectS2 = GTK_COMBO_BOX(app->get_object("street2"));
     if(findButton == nullptr){
         return;
     }
@@ -558,6 +560,12 @@ void setUpShow(ezgl::application *app, bool /*unused*/){
         g_signal_connect(entry2, "changed", G_CALLBACK(onTyped), app);
         g_signal_connect(entry2, "changed", G_CALLBACK(cleanHighlight), app);
     }
+    if(selectS1){
+        g_signal_connect(selectS1, "changed", G_CALLBACK(on_match_selected), app);
+    }
+    if(selectS2){
+        g_signal_connect(selectS2, "changed", G_CALLBACK(on_match_selected), app);
+    }
 
     // Connect toggle buttons
     GtkWidget *streetnameButton = GTK_WIDGET(app -> get_object("showName"));
@@ -565,19 +573,19 @@ void setUpShow(ezgl::application *app, bool /*unused*/){
     //std::cout << "detected the showstreetname button" << std::endl;
 
     GtkWidget *showBuildingButton = GTK_WIDGET(app -> get_object("showbuilding"));
-    g_signal_connect(showBuildingButton, "clicked", G_CALLBACK(showBuildings), app);
+    g_signal_connect(streetnameButton, "clicked", G_CALLBACK(showBuildings), app);
     //std::cout << "detected the showstreetname button" << std::endl;
 
     GtkWidget *showBuildingnameButton = GTK_WIDGET(app -> get_object("showbuildingname"));
-    g_signal_connect(showBuildingnameButton, "clicked", G_CALLBACK(showBuildingnames), app);
+    g_signal_connect(streetnameButton, "clicked", G_CALLBACK(showBuildingnames), app);
     //std::cout << "detected the showstreetname button" << std::endl;
 
     GtkWidget *showDirectionButton = GTK_WIDGET(app -> get_object("showdirection"));
-    g_signal_connect(showDirectionButton, "clicked", G_CALLBACK(showDirections), app);
+    g_signal_connect(streetnameButton, "clicked", G_CALLBACK(showDirections), app);
     //std::cout << "detected the showstreetname button" << std::endl;
 
     GtkWidget *showPOIButton = GTK_WIDGET(app -> get_object("showPOI"));
-    g_signal_connect(showPOIButton, "clicked", G_CALLBACK(showPOIS), app);
+    g_signal_connect(streetnameButton, "clicked", G_CALLBACK(showPOIS), app);
     //std::cout << "detected the showstreetname button" << std::endl;
     
     GtkWidget *helpButton =  GTK_WIDGET(app -> get_object("HelpButton"));
@@ -715,7 +723,7 @@ void StreetSelect(GtkComboBox *self, gpointer data) {
     if (streetSelect == nullptr) return;
 
     std::string selection(streetSelect);
-    g_free(const_cast<gchar *>(streetSelect));
+    g_free((void*)streetSelect);
     if (selection.empty()) return;
 
     highlightStreet.clear();
@@ -731,7 +739,7 @@ void StreetSelect(GtkComboBox *self, gpointer data) {
     app->refresh_drawing();
 }
 
-gboolean on_match_selected(GtkEntryCompletion * /*completion*/, GtkTreeModel *model, GtkTreeIter *iter, gpointer data) {
+gboolean on_match_selected(GtkEntryCompletion *completion, GtkTreeModel *model, GtkTreeIter *iter, gpointer data) {
     gchar *street_name;
     gtk_tree_model_get(model, iter, 0, &street_name, -1);
 
@@ -1113,7 +1121,6 @@ void act_on_mouse_click(ezgl::application* app, GdkEventButton*, double x, doubl
             highlightStreet.clear();
             currentPath.clear();
             showIntersection.clear();
-            return;
             }
 
             app->update_message(ss.str());
@@ -1744,38 +1751,49 @@ void printTurnMessageIfAny(ezgl::application* app) {
         StreetSegmentInfo prevSeg = getStreetSegmentInfo(currentPath[i - 1]);
         StreetSegmentInfo currSeg = getStreetSegmentInfo(currentPath[i]);
 
-        double angle = findStreetSegmentTurnAngle(i - 1, i);
-        if (angle == NO_ANGLE) continue;
-
-        double angle_deg = angle * 180.0 / M_PI;
-        std::string turn;
-
-        if (angle_deg > 30 && angle_deg < 150) {
-            if (angle_deg < 90)
-                turn = "⬅️  Left Turn";
-            else
-                turn = "➡️  Right Turn";
-        } else {
-            turn = "⬆️  Forward";
-        }
-
-        // Find the junction (common intersection)
+        
+        // find the real junction
         IntersectionIdx junction;
         if (prevSeg.to == currSeg.from || prevSeg.to == currSeg.to)
             junction = prevSeg.to;
         else
             junction = prevSeg.from;
+        
+        
 
-        std::string interName = getIntersectionName(junction);
-        ss << turn << " at " << interName << "\n";
+        // use the previous start
+        LatLon prev_from_LL = (prevSeg.from == junction) ? getIntersectionPosition(prevSeg.to) : getIntersectionPosition(prevSeg.from);
+        ezgl::point2d prev_vec(x_from_lon(prev_from_LL.longitude()) - x_from_lon(getIntersectionPosition(junction).longitude()),
+                               y_from_lat(prev_from_LL.latitude()) - y_from_lat(getIntersectionPosition(junction).latitude()));
+
+        // use the end
+        LatLon next_to_LL = (currSeg.to == junction) ? getIntersectionPosition(currSeg.from) : getIntersectionPosition(currSeg.to);
+        ezgl::point2d next_vec(x_from_lon(next_to_LL.longitude()) - x_from_lon(getIntersectionPosition(junction).longitude()),
+                               y_from_lat(next_to_LL.latitude()) - y_from_lat(getIntersectionPosition(junction).latitude()));
+
+        // cross product
+        double cross = prev_vec.x * next_vec.y - prev_vec.y * next_vec.x;
+
+        std::string turn;
+        if (cross < 1e-6)
+            turn = "⬅️  Left Turn";
+        else if (cross > -1e-6)
+            turn = "➡️  Right Turn";
+        else
+            turn = "⬆️  Forward";
+
+        if (prevSeg.streetID == currSeg.streetID){
+            turn = "⬆️  Forward";
+        } 
+
+        ss << turn << " at " << getIntersectionName(junction) << "\n";
     }
 
-    // upload into GtkTextView
+    // GtkTextView
     GtkTextView* textview = GTK_TEXT_VIEW(app->get_object("turn_textview"));
     GtkTextBuffer* buffer = gtk_text_view_get_buffer(textview);
     gtk_text_buffer_set_text(buffer, ss.str().c_str(), -1);
 }
-
 // Checks if a valid path exists in currentPath.
 // If not, displays a GTK dialog informing the user that no path was found.
 bool checkPath(ezgl::application* app) {
