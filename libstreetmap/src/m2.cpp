@@ -63,7 +63,7 @@ void switchMap(GtkComboBoxText* self, ezgl::application* app);
 void nightMode(ezgl::application *app, bool /*Window*/);
 gboolean night_switch(GtkSwitch *, gboolean switch_state, ezgl::application *app);
 void StreetSelect(GtkComboBox *self, gpointer data);
-gboolean on_match_selected(GtkEntryCompletion *completion, GtkTreeModel *model, GtkTreeIter *iter, gpointer data);
+gboolean on_match_selected(GtkEntryCompletion * /*Completion*/, GtkTreeModel *model, GtkTreeIter *iter, gpointer data);
 std::vector<std::string> getIntersectStreets(const std::string &streetName);
 void cleanHighlight(GtkSearchEntry *entry, gpointer data);
 void onTyped(GtkEditable *editable, gpointer data);
@@ -539,9 +539,6 @@ void setUpShow(ezgl::application *app, bool /*unused*/){
     GtkSearchEntry *entry1 = GTK_SEARCH_ENTRY(app -> get_object("street_1"));
     GtkSearchEntry *entry2 = GTK_SEARCH_ENTRY(app -> get_object("street_2"));
     GtkWidget *findButton = GTK_WIDGET(app -> get_object("find_button"));
-    // highlight selected street:
-    GtkComboBox *selectS1 = GTK_COMBO_BOX(app->get_object("street1"));
-    GtkComboBox *selectS2 = GTK_COMBO_BOX(app->get_object("street2"));
     if(findButton == nullptr){
         return;
     }
@@ -559,12 +556,6 @@ void setUpShow(ezgl::application *app, bool /*unused*/){
         g_signal_connect(entry2, "changed", G_CALLBACK(onTyped), app);
         g_signal_connect(entry2, "changed", G_CALLBACK(cleanHighlight), app);
     }
-    if(selectS1){
-        g_signal_connect(selectS1, "changed", G_CALLBACK(on_match_selected), app);
-    }
-    if(selectS2){
-        g_signal_connect(selectS2, "changed", G_CALLBACK(on_match_selected), app);
-    }
 
     // Connect toggle buttons
     GtkWidget *streetnameButton = GTK_WIDGET(app -> get_object("showName"));
@@ -572,19 +563,19 @@ void setUpShow(ezgl::application *app, bool /*unused*/){
     //std::cout << "detected the showstreetname button" << std::endl;
 
     GtkWidget *showBuildingButton = GTK_WIDGET(app -> get_object("showbuilding"));
-    g_signal_connect(streetnameButton, "clicked", G_CALLBACK(showBuildings), app);
+    g_signal_connect(showBuildingButton, "clicked", G_CALLBACK(showBuildings), app);
     //std::cout << "detected the showstreetname button" << std::endl;
 
     GtkWidget *showBuildingnameButton = GTK_WIDGET(app -> get_object("showbuildingname"));
-    g_signal_connect(streetnameButton, "clicked", G_CALLBACK(showBuildingnames), app);
+    g_signal_connect(showBuildingnameButton, "clicked", G_CALLBACK(showBuildingnames), app);
     //std::cout << "detected the showstreetname button" << std::endl;
 
     GtkWidget *showDirectionButton = GTK_WIDGET(app -> get_object("showdirection"));
-    g_signal_connect(streetnameButton, "clicked", G_CALLBACK(showDirections), app);
+    g_signal_connect(showDirectionButton, "clicked", G_CALLBACK(showDirections), app);
     //std::cout << "detected the showstreetname button" << std::endl;
 
     GtkWidget *showPOIButton = GTK_WIDGET(app -> get_object("showPOI"));
-    g_signal_connect(streetnameButton, "clicked", G_CALLBACK(showPOIS), app);
+    g_signal_connect(showPOIButton, "clicked", G_CALLBACK(showPOIS), app);
     //std::cout << "detected the showstreetname button" << std::endl;
     
     GtkWidget *helpButton =  GTK_WIDGET(app -> get_object("HelpButton"));
@@ -722,7 +713,7 @@ void StreetSelect(GtkComboBox *self, gpointer data) {
     if (streetSelect == nullptr) return;
 
     std::string selection(streetSelect);
-    g_free((void*)streetSelect);
+    g_free(const_cast<gchar *>(streetSelect));
     if (selection.empty()) return;
     highlightStreet.clear();
     //iterate through all the street intersecting with the current input
@@ -738,7 +729,7 @@ void StreetSelect(GtkComboBox *self, gpointer data) {
     app->refresh_drawing();
 }
 
-gboolean on_match_selected(GtkEntryCompletion *completion, GtkTreeModel *model, GtkTreeIter *iter, gpointer data) {
+gboolean on_match_selected(GtkEntryCompletion * /*completion*/, GtkTreeModel *model, GtkTreeIter *iter, gpointer data) {
     gchar *street_name;
     gtk_tree_model_get(model, iter, 0, &street_name, -1);
     if (street_name == nullptr) return FALSE;
@@ -1560,6 +1551,7 @@ void pre_load_road_data() {
                     case 2: main_roads.push_back(label); break;
                     case 1: secondary.push_back(label); break;
                     case 0: minor.push_back(label); break;
+                    default: break;
                 }
 
                 accumulated_distance += 300;
