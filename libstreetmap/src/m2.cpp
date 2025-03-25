@@ -74,6 +74,7 @@ void drawNavigatePOI();
 std::vector<IntersectionIdx> parseIntersectionInput(const std::string &input);
 void highlightStreetInput(const std::string &input);
 
+// showing message for the directions and features
 ezgl::point2d findLargestInscribedRectangle(FeatureIdx feature_id);
 std::string splitTextIntoLines(const std::string& text);
 void drawFeatureShapes(ezgl::renderer *g);
@@ -736,6 +737,7 @@ void StreetSelect(GtkComboBox *self, gpointer data) {
     app->refresh_drawing();
 }
 
+// detection for if the matching names is being selected from the dropdown list
 gboolean on_match_selected(GtkEntryCompletion * /*completion*/, GtkTreeModel *model, GtkTreeIter *iter, gpointer data) {
     gchar *street_name;
     gtk_tree_model_get(model, iter, 0, &street_name, -1);
@@ -770,6 +772,7 @@ void cleanHighlight(GtkSearchEntry *entry, gpointer data){
     }
 }
 
+// detection for typing on the searchbar
 void onTyped(GtkEditable *editable, gpointer data){
     ezgl::application *app = static_cast<ezgl::application *>(data);
     GtkEntry *entry = GTK_ENTRY(editable);
@@ -841,13 +844,17 @@ void onTyped(GtkEditable *editable, gpointer data){
     }
 }
 
+// helper function for splitting the text entry input
 std::string trim(const std::string& str) {
-    size_t first = str.find_first_not_of(" \t");
-    if (first == std::string::npos) return "";
-    size_t last = str.find_last_not_of(" \t");
+    size_t first = str.find_first_not_of(" \t"); // first street typed
+    if (first == std::string::npos){
+        return "";
+    }
+    size_t last = str.find_last_not_of(" \t"); // second street typed
     return str.substr(first, last - first + 1);
 }
 
+// return all the possible intersections with given one street
 std::vector<std::string> getIntersectStreets(const std::string &streetName) {
     std::vector<std::string> result;
     std::unordered_set<std::string> seen;
