@@ -71,6 +71,8 @@ void onTyped(GtkEditable *editable, gpointer data);
 std::string trim(const std::string &s);
 void buildIntersectionStreetSegmentMap();
 void drawNavigatePOI();
+std::vector<IntersectionIdx> parseIntersectionInput(const std::string &input);
+void highlightStreetInput(const std::string &input);
 
 ezgl::point2d findLargestInscribedRectangle(FeatureIdx feature_id);
 std::string splitTextIntoLines(const std::string& text);
@@ -377,54 +379,23 @@ void button_clicked(GtkWidget *, gpointer data){
 
     highlightStreet.clear();
     showIntersection.clear();
-    // for each single intersection need to use the seperation to identify input
-    auto parseIntersection = [](const std::string &input) -> std::vector<IntersectionIdx> {
-        size_t amp = input.find('&');
-        if (amp == std::string::npos) return {};
-        std::string s1 = input.substr(0, amp);
-        std::string s2 = input.substr(amp + 1);
-        trim(s1); 
-        trim(s2);
 
-        std::vector<StreetIdx> ids1 = findStreetIdsFromPartialStreetName(s1);
-        std::vector<StreetIdx> ids2 = findStreetIdsFromPartialStreetName(s2);
-        std::vector<IntersectionIdx> results;
-        for (StreetIdx id1 : ids1) {
-            for (StreetIdx id2 : ids2) {
-                std::vector<IntersectionIdx> inters = findIntersectionsOfTwoStreets({id1, id2});
-                results.insert(results.end(), inters.begin(), inters.end());
-            }
-        }
-        return results;
-    };
-
-    auto highlightInput = [](const std::string &input){
-        std::vector<StreetIdx> ids = findStreetIdsFromPartialStreetName(input);
-        for(StreetIdx id : ids){
-            for(StreetSegmentIdx i = 0; i < getNumStreetSegments(); i++){
-                if(getStreetSegmentInfo(i).streetID == id){
-                    highlightStreet.push_back(i);
-                }
-            }
-        }
-    };
-
-    bool input1IsIntersection = input1.find('&') != std::string::npos;
-    bool input2IsIntersection = input2.find('&') != std::string::npos;
-
+    // determine if input has & to show second intersection
+    bool input1IsIntersection = (input1.find('&') != std::string::npos);
+    bool input2IsIntersection = (input2.find('&') != std::string::npos);
     std::vector<IntersectionIdx> srcList, dstList;
-
+    // if intersection exists then check related intersection streets
     if (input1IsIntersection){
-        srcList = parseIntersection(input1);
+        srcList = parseIntersectionInput(input1);
     } 
     else{
-        highlightInput(input1);
+        highlightStreetInput(input1);
     }
     if (input2IsIntersection){
-        dstList = parseIntersection(input2);
+        dstList = parseIntersectionInput(input2);
     }
     else {
-        highlightInput(input2);
+        highlightStreetInput(input2);
     }
     // If both entries are valid street names, autocenter the intersection
     if(!input1IsIntersection && !input2IsIntersection){
@@ -440,6 +411,7 @@ void button_clicked(GtkWidget *, gpointer data){
                     LatLon pos = getIntersectionPosition(showIntersection[0]);
                     ezgl::point2d centerPos(x_from_lon(pos.longitude()), y_from_lat(pos.latitude()));
                     ezgl::rectangle view(centerPos - ezgl::point2d(500, 500), centerPos + ezgl::point2d(500, 500));
+                    // giving a intersection message pop up window
                     std::stringstream ss;
                     ss << "Intersection of: " << input1 << " & " << input2 << "\n\n";
                     ss << "Latitude: " << pos.latitude() << "\nLongitude: " << pos.longitude();
@@ -520,6 +492,39 @@ void button_clicked(GtkWidget *, gpointer data){
         app->change_canvas_world_coordinates("MainCanvas", view);
     }
     app->refresh_drawing();
+}
+
+// function for interate through all the intersecting street based on the first input
+std::vector<IntersectionIdx> parseIntersectionInput(const std::string &input){
+    size_t andInput = input.find('&');
+    if (andInput == std::string::npos) return {};
+    std::string s1 = input.substr(0, andInput);
+    std::string s2 = input.substr(andInput + 1);
+    trim(s1); 
+    trim(s2);
+
+    std::vector<StreetIdx> ids1 = findStreetIdsFromPartialStreetName(s1);
+    std::vector<StreetIdx> ids2 = findStreetIdsFromPartialStreetName(s2);
+    std::vector<IntersectionIdx> results;
+    for (StreetIdx id1 : ids1) {
+        for (StreetIdx id2 : ids2) {
+            std::vector<IntersectionIdx> inters = findIntersectionsOfTwoStreets({id1, id2});
+            results.insert(results.end(), inters.begin(), inters.end());
+        }
+    }
+    return results;
+}
+
+// function for pre-loading the street segment for highlight between intersections
+void highlightStreetInput(const std::string &input){
+    std::vector<StreetIdx> ids = findStreetIdsFromPartialStreetName(input);
+    for(StreetIdx id : ids){
+        for(StreetSegmentIdx i = 0; i < getNumStreetSegments(); i++){
+            if(getStreetSegmentInfo(i).streetID == id){
+                highlightStreet.push_back(i);
+            }
+        }
+    }
 }
 
 // function for drawing the intersections of the streets
@@ -1699,7 +1704,12 @@ void drawArrow(ezgl::renderer *g, const ezgl::point2d& p1, const ezgl::point2d& 
 void drawPathArrows(ezgl::renderer *g) {
     if (currentPath.empty()) return;
 
-    g->set_color(0, 0, 0);  // arrows are black
+    if(nightmode == false){
+        g -> set_color(0, 0, 0); //black arrows
+    }
+    else{
+        g -> set_color(255, 255, 255);
+    }
     double arrowSpacing = 15000.0; // meters
     double accumulatedDist = 0.0;
 
@@ -1714,9 +1724,7 @@ void drawPathArrows(ezgl::renderer *g) {
             if (prev.to == curr.to || prev.from == curr.to)
                 forward = false;
         }
-        
-        
-
+ 
         std::vector<ezgl::point2d> polyline = getSegmentPolyline(segmentId, forward);
         //calculate the accumulated distance
         for (size_t i = 0; i + 1 < polyline.size(); ++i) {
