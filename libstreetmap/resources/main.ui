@@ -15,7 +15,7 @@
           <object class="GtkLabel" id="HelpLabel">
             <property name="visible">True</property>
             <property name="can-focus">False</property>
-            <property name="label" translatable="yes">Welcome To The JWL GIS. 
+            <property name="label" translatable="yes">Welcome To Travelight
 
 -Use the search bar to select your start and end point of navigation. 
 -You can use the search bar to find your street and intersections.
@@ -93,7 +93,7 @@ visualize your orientation.</property>
             <property name="margin-right">10</property>
             <property name="orientation">vertical</property>
             <child>
-              <!-- n-columns=3 n-rows=12 -->
+              <!-- n-columns=3 n-rows=14 -->
               <object class="GtkGrid" id="InnerGrid">
                 <property name="visible">True</property>
                 <property name="can-focus">False</property>
@@ -237,14 +237,16 @@ visualize your orientation.</property>
                 </child>
                 <child>
                   <object class="GtkScrolledWindow" id="turn_scroll">
-                    <property name="visible">true</property>
                     <property name="height-request">240</property>
+                    <property name="visible">True</property>
+                    <property name="can-focus">False</property>
                     <child>
                       <object class="GtkTextView" id="turn_textview">
-                        <property name="visible">true</property>
-                        <property name="editable">false</property>
-                        <property name="wrap_mode">word</property>
-                        <property name="cursor_visible">false</property>
+                        <property name="visible">True</property>
+                        <property name="can-focus">False</property>
+                        <property name="editable">False</property>
+                        <property name="wrap-mode">word</property>
+                        <property name="cursor-visible">False</property>
                       </object>
                     </child>
                   </object>
@@ -252,7 +254,7 @@ visualize your orientation.</property>
                     <property name="left-attach">0</property>
                     <property name="top-attach">12</property>
                     <property name="width">3</property>
-                    </packing>
+                  </packing>
                 </child>
                 <child>
                   <object class="GtkLabel" id="SpeedLegendLabel">
@@ -262,7 +264,6 @@ visualize your orientation.</property>
 🟦 &lt; 30 km/h
 🟪 30–60 km/h
 🟩 &gt; 60 km/h</property>
-                    <property name="justify">left</property>
                     <attributes>
                       <attribute name="font-desc" value="Monospace 10"/>
                     </attributes>
