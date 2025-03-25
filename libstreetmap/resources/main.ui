@@ -27,7 +27,15 @@ turning street, street paths, and the total distance to the destination.
 can click on them based on your needs.
 -If you want to check the services around your destination, zoom in
 to see the labels for service features such as restaurant, hospital,
-parking location and bike rental.</property>
+parking location and bike rental.
+-You should enforce your input to type &amp; at the end of searching the
+first streetname, in order to trigger the second street because of
+the system needs to clearly identify difference between symbol "&amp;" 
+and the second streetname
+-Once the shortest path navigation implemented, the path will be 
+highlighted in different colors, which are in terms of road speed limit
+and there will be travelling direction arrows on the road to help you
+visualize your orientation.</property>
             <attributes>
               <attribute name="font-desc" value="C059 12"/>
             </attributes>
@@ -376,7 +384,7 @@ parking location and bike rental.</property>
                 <property name="visible">True</property>
                 <property name="can-focus">False</property>
                 <child>
-                  <object class="GtkLabel">
+                  <object class="GtkLabel" id="NightThemeText">
                     <property name="visible">True</property>
                     <property name="can-focus">False</property>
                     <property name="label" translatable="yes">Night Theme</property>
