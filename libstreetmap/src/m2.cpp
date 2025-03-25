@@ -106,6 +106,8 @@ void draw_main_canvas(ezgl::renderer *g);
 void setInterface(ezgl::application &application);
 void load_street_names();
 void preloadFeatureDrawingOrder();
+std::vector<ezgl::point2d> getSegmentPolyline(StreetSegmentIdx segmentId, bool forward);
+void drawArrow(ezgl::renderer *g, const ezgl::point2d& p1, const ezgl::point2d& p2);
 void drawPathArrows(ezgl::renderer *g);
 void printTurnMessageIfAny(ezgl::application* app);
 bool checkPath(ezgl::application* app);
@@ -1079,7 +1081,7 @@ void setInterface(ezgl::application &application) {
 
 // It processes the click to identify and highlight intersections,
 // and initiates pathfinding when two valid intersections are selected.
-void act_on_mouse_click(ezgl::application* app, GdkEventButton* event, double x, double y) {
+void act_on_mouse_click(ezgl::application* app, GdkEventButton*, double x, double y) {
     LatLon pos = LatLon(lat_from_y(y), lon_from_x(x));
     int inter_id = findClosestIntersection(pos);
     
@@ -1572,6 +1574,7 @@ void pre_load_road_data() {
                     case 2: main_roads.push_back(label); break;
                     case 1: secondary.push_back(label); break;
                     case 0: minor.push_back(label); break;
+                    default: break;
                 }
 
                 accumulated_distance += 300;
