@@ -776,14 +776,12 @@ void cleanHighlight(GtkSearchEntry *entry, gpointer data){
 void onTyped(GtkEditable *editable, gpointer data){
     ezgl::application *app = static_cast<ezgl::application *>(data);
     GtkEntry *entry = GTK_ENTRY(editable);
-
     std::string input = gtk_entry_get_text(entry);
     GtkEntryCompletion *completion = gtk_entry_get_completion(entry);
 
     size_t andSign = input.find('&');
     GtkListStore *store = gtk_list_store_new(1, G_TYPE_STRING);
     GtkTreeIter iter;
-
     if (andSign != std::string::npos) {
         std::string street1 = trim(input.substr(0, andSign));
         auto street1_ids = findStreetIdsFromPartialStreetName(street1);
@@ -801,7 +799,7 @@ void onTyped(GtkEditable *editable, gpointer data){
             gtk_list_store_append(store, &iter);
             gtk_list_store_set(store, &iter, 0, s.c_str(), -1);
         }
-
+        //hardcoding all the gtk autocompletion menu avoiding low level insensative by gtk
         gtk_entry_completion_set_model(completion, GTK_TREE_MODEL(store));
         gtk_entry_completion_set_text_column(completion, 0);
         gtk_entry_completion_set_inline_completion(completion, TRUE);
@@ -857,21 +855,17 @@ std::string trim(const std::string& str) {
 // return all the possible intersections with given one street
 std::vector<std::string> getIntersectStreets(const std::string &streetName) {
     std::vector<std::string> result;
-    std::unordered_set<std::string> seen;
+    std::unordered_set<std::string> passed;
     std::vector<StreetIdx> streetIDs = findStreetIdsFromPartialStreetName(streetName);
-
-    for (StreetIdx sid : streetIDs) {
-        auto segments = streetSegmentVector[sid];
-
+    for (StreetIdx id : streetIDs) {
+        auto segments = streetSegmentVector[id];
         for (StreetSegmentIdx segID : segments) {
             StreetSegmentInfo seg = getStreetSegmentInfo(segID);
-
-            for (IntersectionIdx inter : {seg.from, seg.to}) {
-                for (StreetSegmentIdx neighborSeg : intersectionStreetSegments[inter]) {
+            for (IntersectionIdx interPair : {seg.from, seg.to}) {
+                for (StreetSegmentIdx neighborSeg : intersectionStreetSegments[interPair]) {
                     StreetSegmentInfo neighborInfo = getStreetSegmentInfo(neighborSeg);
                     std::string neighborName = getStreetName(neighborInfo.streetID);
-
-                    if (neighborName != streetName && seen.insert(neighborName).second) {
+                    if (neighborName != streetName && passed.insert(neighborName).second) {
                         result.push_back(neighborName);
                     }
                 }
