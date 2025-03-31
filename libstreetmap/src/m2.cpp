@@ -461,7 +461,6 @@ void button_clicked(GtkWidget *, gpointer data){
         
         showIntersection.clear();
 
-
         IntersectionIdx from = srcList[0];
         IntersectionIdx to = dstList[0];
 
@@ -764,7 +763,6 @@ gboolean on_match_selected(GtkEntryCompletion * /*completion*/, GtkTreeModel *mo
             }
         }
     }
-
     g_free(street_name);
     app->refresh_drawing();
     return FALSE;  // Allow default handler to run
@@ -791,7 +789,7 @@ void onTyped(GtkEditable *editable, gpointer data){
     GtkListStore *store = gtk_list_store_new(1, G_TYPE_STRING);
     GtkTreeIter iter;
     if (andSign != std::string::npos) {
-        std::string street1 = trim(input.substr(0, andSign));
+        std::string street1 = trim(input.substr(0, andSign)); // extract first part
         auto street1_ids = findStreetIdsFromPartialStreetName(street1);
         // need to parse through all the related intersection street segments give first street name
         std::set<std::string> suggestions;

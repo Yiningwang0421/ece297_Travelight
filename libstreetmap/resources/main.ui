@@ -430,7 +430,7 @@ visualize your orientation.</property>
             <property name="primary-icon-name">edit-find-symbolic</property>
             <property name="primary-icon-activatable">False</property>
             <property name="primary-icon-sensitive">False</property>
-            <property name="placeholder-text" translatable="yes">Enter First Street</property>
+            <property name="placeholder-text" translatable="yes">Enter Street or Intersection</property>
           </object>
           <packing>
             <property name="left-attach">0</property>
@@ -447,7 +447,7 @@ visualize your orientation.</property>
             <property name="primary-icon-name">edit-find-symbolic</property>
             <property name="primary-icon-activatable">False</property>
             <property name="primary-icon-sensitive">False</property>
-            <property name="placeholder-text" translatable="yes">Enter Second Street</property>
+            <property name="placeholder-text" translatable="yes">Enter Street or Intersection</property>
           </object>
           <packing>
             <property name="left-attach">0</property>
