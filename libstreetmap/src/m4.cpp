@@ -1,43 +1,106 @@
 #include "global.h"
+#include "m1.h"
 #include "m3.h"
 #include "m4.h"
 #include <unordered_map>
 #include <unordered_set>
 #include <vector>
 
-void precomputePath(const std::vector<DeliveryInf>& deliveriesVec, const std::vector<IntersectionIdx>& depotVec, float turnPenalty);
 struct PathInfo{
     float travel_time;
     std::vector<StreetSegmentIdx> path;
 };
 std::unordered_map<IntersectionIdx, std::unordered_map<IntersectionIdx, PathInfo>> precompute;
+std::unordered_map<IntersectionIdx, PathInfo> dijkstra(IntersectionIdx start, const std::unordered_set<IntersectionIdx>& target, float turnPenalty);
+void precomputePath(const std::vector<DeliveryInf>& deliveries, const std::vector<IntersectionIdx>& depots, float turnPenalty);
 
 // precomputation
-void precomputePath(const std::vector<DeliveryInf>& deliveriesVec, const std::vector<IntersectionIdx>& depotVec, float turnPenalty){
-    std::unordered_set<IntersectionIdx> targetCompute;
-    // store all the pickup and dropoff locations
-    for(int i = 0; i < deliveriesVec.size(); i++){
-        targetCompute.insert(deliveriesVec[i].pickUp);
-        targetCompute.insert(deliveriesVec[i].dropOff);
-    }
-    // store the depot location
-    for(int i = 0; i < depotVec.size(); i++){
-        targetCompute.insert(depotVec[i]);
-    }
-    //process the time and path found using m3 functions, then store it into our unordered map
-    for(std::unordered_set<IntersectionIdx>::iterator i = targetCompute.begin(); i != targetCompute.end(); i++){
-        for(std::unordered_set<IntersectionIdx>::iterator j = targetCompute.begin(); j != targetCompute.end(); j++){
-            if(*i == *j){
-                continue;
-            }
-            IntersectionIdx from = *i;
-            IntersectionIdx to = *j;
-            std::vector<StreetSegmentIdx> path = findPathBetweenIntersections(turnPenalty, std::make_pair(from, to));
-            if(!path.empty()){
-                float penalty_time = computePathTravelTime(turnPenalty, path);
-                precompute[from][to] = PathInfo{penalty_time, path};
+std::unordered_map<IntersectionIdx, PathInfo> dijkstra(IntersectionIdx start, const std::unordered_set<IntersectionIdx>& target, float turnPenalty){
+    std::unordered_map<IntersectionIdx, PathInfo> result;
+    std::unordered_map<IntersectionIdx, float> bestTime;
+    std::unordered_map<IntersectionIdx, StreetSegmentIdx> startPt;
+    std::unordered_set<IntersectionIdx> visited;
+    std::vector<IntersectionIdx> selectRoute;
+    bestTime[start] = 0.0;
+    selectRoute.push_back(start);
+    while(!selectRoute.empty()){
+        float minT = 99999.0;
+        int bestInd = -1;
+        for(int i = 0; i < selectRoute.size(); i++){
+            if(bestTime[selectRoute[i]] < minT){
+                minT = bestTime[selectRoute[i]];
+                bestInd = i;
             }
         }
+        //find nodes that takes shortest time
+        IntersectionIdx selection = selectRoute[bestInd];
+        selectRoute.erase(selectRoute.begin() + bestInd);
+        if(visited.count(selection)){
+            continue;
+        }
+        visited.insert(selection);
+        const std::vector<StreetSegmentIdx>& streetseg = findStreetSegmentsOfIntersection(selection);
+        for(StreetSegmentIdx streetId: streetseg){
+            const StreetSegmentInfo &streetInfo = getStreetSegmentInfo(streetId);
+            if(streetInfo.oneWay && streetInfo.from != selection){
+                continue;
+            }
+            IntersectionIdx intersectType;
+            if(streetInfo.from == selection){
+                intersectType = streetInfo.to;
+            }
+            else{
+                intersectType = streetInfo.from;
+            }
+            float penalty = 0.0f;
+            if(startPt.count(selection)){
+                StreetSegmentIdx prevSeg = startPt[selection];
+                if(getStreetSegmentInfo(prevSeg).streetID != streetInfo.streetID){
+                    penalty = turnPenalty;
+                }
+            }
+            float time = bestTime[selection] + findStreetSegmentTravelTime(streetId) + penalty;
+            if(!bestTime.count(intersectType) || time < bestTime[intersectType]){
+                bestTime[intersectType] = time;
+                startPt[intersectType] = streetId;
+                selectRoute.push_back(intersectType);
+            }
+        }
+    }
+    // building the paths
+    for(const IntersectionIdx& to: target){
+        if(to == start || !startPt.count(to)){ continue;}
+        std::vector<StreetSegmentIdx> path;
+        IntersectionIdx curr = to;
+        while(curr != start){
+            StreetSegmentIdx seg = startPt[curr];
+            path.push_back(seg);
+            const StreetSegmentInfo& segInfo = getStreetSegmentInfo(seg);
+            if(segInfo.to == curr){
+                curr = segInfo.from;
+            }
+            else{
+                curr = segInfo.to;
+            }
+        }
+        std::reverse(path.begin(), path.end());
+        result[to] = {bestTime[to], path};
+    }
+    return result;
+}
+
+void precomputePath(const std::vector<DeliveryInf> & deliveries, const std::vector<IntersectionIdx>& depots, float turnPenalty){
+    std::unordered_set<IntersectionIdx> nodes;
+    for(int i = 0; i < deliveries.size(); i++){
+        nodes.insert(deliveries[i].dropOff);
+        nodes.insert(deliveries[i].pickUp);
+    }
+    for(int i = 0; i < depots.size(); i++){
+        nodes.insert(depots[i]);
+    }
+    for(std::unordered_set<IntersectionIdx>::iterator i = nodes.begin(); i != nodes.end(); i++){
+        IntersectionIdx start = *i;
+        precompute[start] = dijkstra(start, nodes, turnPenalty);
     }
 }
 
