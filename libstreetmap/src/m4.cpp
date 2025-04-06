@@ -17,82 +17,106 @@ std::unordered_map<IntersectionIdx, std::unordered_map<IntersectionIdx, PathInfo
 std::unordered_map<IntersectionIdx, PathInfo> dijkstra(IntersectionIdx start, const std::unordered_set<IntersectionIdx>& target, float turnPenalty);
 void precomputePath(const std::vector<DeliveryInf>& deliveries, const std::vector<IntersectionIdx>& depots, float turnPenalty);
 
-std::unordered_map<IntersectionIdx, PathInfo> dijkstra(IntersectionIdx start,const std::unordered_set<IntersectionIdx>& target,float turnPenalty){
+std::unordered_map<IntersectionIdx, PathInfo> aStar(
+    IntersectionIdx start,
+    const std::unordered_set<IntersectionIdx>& target,
+    float turnPenalty) {
+
     std::unordered_map<IntersectionIdx, PathInfo> result;
-    std::vector<float> bestTime(getNumIntersections(), 999999);
+    std::vector<float> bestTime(getNumIntersections(), std::numeric_limits<float>::max());
     std::vector<StreetSegmentIdx> parent(getNumIntersections(), -1);
-    std::set<std::pair<float, IntersectionIdx>> open;
+    std::set<std::pair<float, IntersectionIdx>> open; // (f = g + h, node)
+
     bestTime[start] = 0.0;
-    open.insert(std::make_pair(0.0, start));
+
+    // Choose a single goal for heuristic, if applicable
+    IntersectionIdx goal = -1;
+    bool useHeuristic = (target.size() == 1);
+    if (useHeuristic) goal = *target.begin();
+
+    auto heuristic = [&](IntersectionIdx from) -> float {
+        if (!useHeuristic) return 0.0f;
+        LatLon p1 = getIntersectionPosition(from);
+        LatLon p2 = getIntersectionPosition(goal);
+        return findDistanceBetweenTwoPoints(p1, p2) / 25.0f; // Rough average city speed
+    };
+
+    open.insert({heuristic(start), start});
+
     while (!open.empty()) {
-        std::pair<float, IntersectionIdx> current = *open.begin();
+        auto [currF, from] = *open.begin();
         open.erase(open.begin());
-        IntersectionIdx from = current.second; //retrieve the value in pair and compute the possible paths
-        const std::vector<StreetSegmentIdx>& segs = findStreetSegmentsOfIntersection(from);
-        for (int i = 0; i < segs.size(); i++) {
-            StreetSegmentIdx s = segs[i];
+
+        // Optional early exit if we reach one of the targets
+        if (target.count(from)) {
+            if (useHeuristic) break; // if only one target, exit early
+        }
+
+        const auto& segs = findStreetSegmentsOfIntersection(from);
+        for (StreetSegmentIdx s : segs) {
             const StreetSegmentInfo& info = getStreetSegmentInfo(s);
-            if (info.oneWay && info.from != from){
-                continue;
-            }
-            // returning the head and tail of an segment for finding further delivery nodes
-            IntersectionIdx to;
-            if (info.from == from){
-                to = info.to;
-            } 
-            else {
-                to = info.from;
-            }
-            float penalty = 0.0;
+
+            if (info.oneWay && info.from != from) continue;
+
+            IntersectionIdx to = (info.from == from) ? info.to : info.from;
+
+            float penalty = 0.0f;
             if (parent[from] != -1) {
-                const StreetSegmentInfo& prev = getStreetSegmentInfo(parent[from]);
-                if (prev.streetID != info.streetID) {
-                    penalty = turnPenalty;
-                }
+                const auto& prev = getStreetSegmentInfo(parent[from]);
+                if (prev.streetID != info.streetID) penalty = turnPenalty;
             }
-            float newTime = bestTime[from] + findStreetSegmentTravelTime(s) + penalty;
-            if (newTime < bestTime[to]) {
-                if (bestTime[to] != std::numeric_limits<float>::max()) {
-                    open.erase(std::make_pair(bestTime[to], to));
-                }
-                bestTime[to] = newTime;
+
+            float travelTime = findStreetSegmentTravelTime(s);
+            float newG = bestTime[from] + travelTime + penalty;
+
+            if (newG < bestTime[to]) {
+                open.erase({bestTime[to] + heuristic(to), to});
+                bestTime[to] = newG;
                 parent[to] = s;
-                open.insert(std::make_pair(newTime, to));
+                open.insert({newG + heuristic(to), to});
             }
         }
     }
 
-    for (std::unordered_set<IntersectionIdx>::const_iterator it = target.begin(); it != target.end(); ++it) {
-        IntersectionIdx to = *it;
-        if (to == start || parent[to] == -1){
-            continue;
-        }
+    for (IntersectionIdx to : target) {
+        if (to == start || parent[to] == -1) continue;
+
         std::vector<StreetSegmentIdx> path;
         IntersectionIdx curr = to;
         while (curr != start) {
             StreetSegmentIdx seg = parent[curr];
             path.push_back(seg);
-            const StreetSegmentInfo& info = getStreetSegmentInfo(seg);
-            if (info.to == curr) curr = info.from;
-            else curr = info.to;
+            const auto& info = getStreetSegmentInfo(seg);
+            curr = (info.to == curr) ? info.from : info.to;
         }
         std::reverse(path.begin(), path.end());
         result[to] = {bestTime[to], path};
     }
+
     return result;
 }
 
 void precomputePath(const std::vector<DeliveryInf> & deliveries, const std::vector<IntersectionIdx>& depots, float turnPenalty){
     std::unordered_set<IntersectionIdx> nodes;
-    for(int i = 0; i < deliveries.size(); i++){
-        nodes.insert(deliveries[i].dropOff);
-        nodes.insert(deliveries[i].pickUp);
+
+    // Collect all relevant nodes: pickups, dropoffs, and depots
+    for (const auto& delivery : deliveries) {
+        nodes.insert(delivery.pickUp);
+        nodes.insert(delivery.dropOff);
     }
-    for(int i = 0; i < depots.size(); i++){
-        nodes.insert(depots[i]);
+    for (const auto& depot : depots) {
+        nodes.insert(depot);
     }
-    for(std::unordered_set<IntersectionIdx>::iterator i = nodes.begin(); i != nodes.end(); i++){
-        precompute[*i] = dijkstra(*i, nodes, turnPenalty);
+
+    // Precompute paths from every node to all other nodes
+    for (IntersectionIdx start : nodes) {
+        std::unordered_set<IntersectionIdx> targets = nodes;
+        targets.erase(start);  // No need to compute path to self
+
+        auto paths = aStar(start, targets, turnPenalty);
+
+        // Store results in the global precompute map
+        precompute[start] = paths;
     }
 }
 
