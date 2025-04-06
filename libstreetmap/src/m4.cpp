@@ -20,7 +20,7 @@ std::unordered_map<IntersectionIdx, PathInfo> dijkstra(IntersectionIdx start, co
 void precomputePath(const std::vector<DeliveryInf>& deliveries, const std::vector<IntersectionIdx>& depots, float turnPenalty);
 void swapOrder(std::vector<int>& bestOrder, float& bestTime, IntersectionIdx bestDepot, const std::vector<DeliveryInf>& deliveries, const std::vector<IntersectionIdx>& depots);
 void opt2Perturbation(std::vector<int>& bestOrder, float& bestTime, IntersectionIdx bestDepot, const std::vector<DeliveryInf>& deliveries, const std::vector<IntersectionIdx>& depots);
-
+bool RandomGreedyOptimized(const std::vector<DeliveryInf>& deliveries, const std::vector<IntersectionIdx>& depots, std::vector<int>& outOrder, IntersectionIdx& outStartDepot, float& outTravelTime);
 std::unordered_map<IntersectionIdx, PathInfo> dijkstra(IntersectionIdx start,const std::unordered_set<IntersectionIdx>& target,float turnPenalty){
     std::unordered_map<IntersectionIdx, PathInfo> result;
     std::vector<float> bestTime(getNumIntersections(), 999999);
@@ -204,9 +204,66 @@ void opt2Perturbation(std::vector<int>& bestOrder, float& bestTime, Intersection
     }
 }
 
-std::vector<CourierSubPath> travelingCourier(const float turn_penalty,
-                                             const std::vector<DeliveryInf>& deliveries,
-                                             const std::vector<IntersectionIdx>& depots) {
+bool RandomGreedyOptimized(const std::vector<DeliveryInf>& deliveries, const std::vector<IntersectionIdx>& depots, std::vector<int>& outOrder, IntersectionIdx& outStartDepot, float& outTravelTime){
+    const int k = 3; 
+    std::unordered_set<int> pickedUp, droppedOff;
+    std::vector<int> order;
+    IntersectionIdx curr = depots[rand() % depots.size()];
+    outStartDepot = curr;
+    outOrder.clear();
+    outTravelTime = 0.0;
+
+    while (droppedOff.size() < deliveries.size()) {
+        std::vector<std::pair<float, int>> candidates;
+        for (int i = 0; i < deliveries.size(); ++i) {
+            if (pickedUp.count(i) && !droppedOff.count(i)) {
+                IntersectionIdx drop = deliveries[i].dropOff;
+                if (precompute[curr].count(drop))
+                    candidates.emplace_back(precompute[curr][drop].travel_time, i);
+            }
+        }
+        for (int i = 0; i < deliveries.size(); ++i) {
+            if (!pickedUp.count(i)) {
+                IntersectionIdx pick = deliveries[i].pickUp;
+                if (precompute[curr].count(pick))
+                    candidates.emplace_back(precompute[curr][pick].travel_time, i);
+            }
+        }
+        if (candidates.empty()) return false;
+        std::sort(candidates.begin(), candidates.end());
+        int chosenIdx = candidates[rand() % std::min(k, (int)candidates.size())].second;
+        order.push_back(chosenIdx);
+        if (pickedUp.count(chosenIdx)) droppedOff.insert(chosenIdx);
+        else pickedUp.insert(chosenIdx);
+        curr = pickedUp.count(chosenIdx) ? deliveries[chosenIdx].dropOff : deliveries[chosenIdx].pickUp;
+    }
+    pickedUp.clear();
+    droppedOff.clear();
+    curr = outStartDepot;
+    outTravelTime = 0.0;
+
+    for (int idx : order) {
+        IntersectionIdx next = pickedUp.count(idx) ? deliveries[idx].dropOff : deliveries[idx].pickUp;
+        if (!precompute[curr].count(next)) return false;
+
+        outTravelTime += precompute[curr][next].travel_time;
+        curr = next;
+        if (pickedUp.count(idx)) droppedOff.insert(idx);
+        else pickedUp.insert(idx);
+    }
+    float returnT = std::numeric_limits<float>::max();
+    for (IntersectionIdx depot : depots) {
+        if (precompute[curr].count(depot))
+            returnT = std::min(returnT, precompute[curr][depot].travel_time);
+    }
+
+    if (returnT == std::numeric_limits<float>::max()) return false;
+
+    outTravelTime += returnT;
+    outOrder = order;
+    return true;
+}
+std::vector<CourierSubPath> travelingCourier(const float turn_penalty, const std::vector<DeliveryInf>& deliveries, const std::vector<IntersectionIdx>& depots) {
     precompute.clear();
     precomputePath(deliveries, depots, turn_penalty);
 
@@ -214,84 +271,22 @@ std::vector<CourierSubPath> travelingCourier(const float turn_penalty,
     float bestTime = std::numeric_limits<float>::max();
     IntersectionIdx bestDepot = depots[0];
 
-    for (const IntersectionIdx& depot : depots) {
-        std::unordered_set<int> pickedUp, droppedOff;
+    const int NUM_ATTEMPTS = 8;
+    for (int attempt = 0; attempt < NUM_ATTEMPTS; ++attempt) {
         std::vector<int> order;
-        IntersectionIdx curr = depot;
-        bool valid = true;
+        float time = 0.0;
+        IntersectionIdx depot;
+        if (!RandomGreedyOptimized(deliveries, depots, order, depot, time))
+            continue;
 
-        while (droppedOff.size() < deliveries.size()) {
-            int bestIdx = -1;
-            float minTime = std::numeric_limits<float>::max();
-            IntersectionIdx next = -1;
-
-            for (int i = 0; i < deliveries.size(); i++) {
-                if (pickedUp.count(i) && !droppedOff.count(i)) {
-                    IntersectionIdx drop = deliveries[i].dropOff;
-                    if (precompute[curr].count(drop)) {
-                        float t = precompute[curr][drop].travel_time;
-                        if (t < minTime) {
-                            minTime = t;
-                            bestIdx = i;
-                            next = drop;
-                        }
-                    }
-                }
-            }
-
-            if (bestIdx == -1) {
-                for (int i = 0; i < deliveries.size(); i++) {
-                    if (!pickedUp.count(i)) {
-                        IntersectionIdx pick = deliveries[i].pickUp;
-                        if (precompute[curr].count(pick)) {
-                            float t = precompute[curr][pick].travel_time;
-                            if (t < minTime) {
-                                minTime = t;
-                                bestIdx = i;
-                                next = pick;
-                            }
-                        }
-                    }
-                }
-            }
-
-            if (bestIdx == -1) {
-                valid = false;
-                break;
-            }
-
-            order.push_back(bestIdx);
-            if (pickedUp.count(bestIdx)) droppedOff.insert(bestIdx);
-            else pickedUp.insert(bestIdx);
-            curr = next;
+        for (int i = 0; i < 3; ++i) {
+            float prev = time;
+            swapOrder(order, time, depot, deliveries, depots);
+            opt2Perturbation(order, time, depot, deliveries, depots);
+            if (time >= prev - 0.1f) break;
         }
-
-        if (!valid) continue;
-
-        float totalTime = 0;
-        pickedUp.clear();
-        droppedOff.clear();
-        curr = depot;
-
-        for (int idx : order) {
-            IntersectionIdx next = pickedUp.count(idx) ? deliveries[idx].dropOff : deliveries[idx].pickUp;
-            totalTime += precompute[curr][next].travel_time;
-            curr = next;
-            if (pickedUp.count(idx)) droppedOff.insert(idx);
-            else pickedUp.insert(idx);
-        }
-
-        float returnT = std::numeric_limits<float>::max();
-        for (const IntersectionIdx& endDepot : depots) {
-            if (precompute[curr].count(endDepot)) {
-                float t = precompute[curr][endDepot].travel_time;
-                if (t < returnT) returnT = t;
-            }
-        }
-
-        totalTime += returnT;
-        if (totalTime < bestTime) {
-            bestTime = totalTime;
+        if (time < bestTime) {
+            bestTime = time;
             bestOrder = order;
             bestDepot = depot;
         }
