@@ -7,6 +7,7 @@
 #include <vector>
 #include <limits>
 #include <set>
+#include <omp.h>
 
 struct PathInfo{
     float travel_time;
@@ -18,6 +19,7 @@ std::unordered_map<IntersectionIdx, PathInfo> dijkstra(IntersectionIdx start, co
 void precomputePath(const std::vector<DeliveryInf>& deliveries, const std::vector<IntersectionIdx>& depots, float turnPenalty);
 void swapOrder(std::vector<int>& bestOrder, float& bestTime, IntersectionIdx bestDepot, const std::vector<DeliveryInf>& deliveries, const std::vector<IntersectionIdx>& depots);
 void opt2Perturbation(std::vector<int>& bestOrder, float& bestTime, IntersectionIdx bestDepot, const std::vector<DeliveryInf>& deliveries, const std::vector<IntersectionIdx>& depots);
+
 std::unordered_map<IntersectionIdx, PathInfo> dijkstra(IntersectionIdx start,const std::unordered_set<IntersectionIdx>& target,float turnPenalty){
     std::unordered_map<IntersectionIdx, PathInfo> result;
     std::vector<float> bestTime(getNumIntersections(), 999999);
@@ -92,14 +94,24 @@ void precomputePath(const std::vector<DeliveryInf> & deliveries, const std::vect
     for(int i = 0; i < depots.size(); i++){
         nodes.insert(depots[i]);
     }
-    for(std::unordered_set<IntersectionIdx>::iterator i = nodes.begin(); i != nodes.end(); i++){
-        precompute[*i] = dijkstra(*i, nodes, turnPenalty);
+    std::vector<IntersectionIdx> nodeVector(nodes.begin(), nodes.end());
+    #pragma omp parallel for
+    for(int i = 0; i < nodeVector.size(); i++){
+        IntersectionIdx from = nodeVector[i];
+        std::unordered_map<IntersectionIdx, PathInfo> result = dijkstra(from, nodes,turnPenalty);
+        #pragma omp critical
+        precompute[from] = std::move(result);
     }
 }
 
 void swapOrder(std::vector<int>& bestOrder, float& bestTime, IntersectionIdx bestDepot, const std::vector<DeliveryInf>& deliveries, const std::vector<IntersectionIdx>& depots){
+    int maxSwap = 10000;
+    int count = 0;
     for (int i = 0; i + 1 < bestOrder.size(); i++) {
         for (int j = i + 1; j < bestOrder.size(); j++) {
+            if(++count > maxSwap){
+                return;
+            }
             std::vector<int> temp = bestOrder;
             std::swap(temp[i], temp[j]);
             std::unordered_set<int> pickedUp, droppedOff;
@@ -114,10 +126,19 @@ void swapOrder(std::vector<int>& bestOrder, float& bestTime, IntersectionIdx bes
                     break;
                 }
                 newTime += precompute[curr][next].travel_time;
+                if(newTime > bestTime){
+                    valid = false;
+                    break;
+                }
                 curr = next;
-                if (pickedUp.count(idx)) droppedOff.insert(idx);
-                else pickedUp.insert(idx);
+                if (pickedUp.count(idx)){
+                    droppedOff.insert(idx);
+                }
+                else {
+                    pickedUp.insert(idx);
+                }
             }
+            if(!valid){continue;}
 
             float returnTime = std::numeric_limits<float>::max();
             for (const IntersectionIdx& depot : depots) {
