@@ -8,6 +8,7 @@
 #include <limits>
 #include <set>
 #include <omp.h>
+#include <queue>
 
 struct PathInfo{
     float travel_time;
@@ -24,60 +25,54 @@ std::unordered_map<IntersectionIdx, PathInfo> dijkstra(IntersectionIdx start,con
     std::unordered_map<IntersectionIdx, PathInfo> result;
     std::vector<float> bestTime(getNumIntersections(), 999999);
     std::vector<StreetSegmentIdx> parent(getNumIntersections(), -1);
-    std::set<std::pair<float, IntersectionIdx>> open;
+    std::priority_queue<std::pair<float, IntersectionIdx>, std::vector<std::pair<float, IntersectionIdx>>, std::greater<>> computeQ;
     bestTime[start] = 0.0;
-    open.insert(std::make_pair(0.0, start));
-    while (!open.empty()) {
-        std::pair<float, IntersectionIdx> current = *open.begin();
-        open.erase(open.begin());
-        IntersectionIdx from = current.second; //retrieve the value in pair and compute the possible paths
-        const std::vector<StreetSegmentIdx>& segs = findStreetSegmentsOfIntersection(from);
-        for (int i = 0; i < segs.size(); i++) {
-            StreetSegmentIdx s = segs[i];
-            const StreetSegmentInfo& info = getStreetSegmentInfo(s);
-            if (info.oneWay && info.from != from){
-                continue;
-            }
-            // returning the head and tail of an segment for finding further delivery nodes
-            IntersectionIdx to;
-            if (info.from == from){
+    computeQ.emplace(0.0, start);
+    while (!computeQ.empty()) {
+        auto [currTime, from] = computeQ.top();
+        computeQ.pop();
+        if(currTime > bestTime[from]) {continue;}
+        const auto& segments = findStreetSegmentsOfIntersection(from);
+        for(const StreetSegmentIdx seg:segments){
+            const auto& info = getStreetSegmentInfo(seg);
+            if(info.oneWay && info.from != from){continue;}
+            IntersectionIdx to = -1;
+            if(info.from == from){
                 to = info.to;
-            } 
-            else {
+            }
+            else{
                 to = info.from;
             }
             float penalty = 0.0;
-            if (parent[from] != -1) {
-                const StreetSegmentInfo& prev = getStreetSegmentInfo(parent[from]);
-                if (prev.streetID != info.streetID) {
+            if(parent[from] != -1){
+                const auto& prevInfo =  getStreetSegmentInfo(parent[from]);
+                if(prevInfo.streetID != info.streetID){
                     penalty = turnPenalty;
                 }
             }
-            float newTime = bestTime[from] + findStreetSegmentTravelTime(s) + penalty;
-            if (newTime < bestTime[to]) {
-                if (bestTime[to] != std::numeric_limits<float>::max()) {
-                    open.erase(std::make_pair(bestTime[to], to));
-                }
-                bestTime[to] = newTime;
-                parent[to] = s;
-                open.insert(std::make_pair(newTime, to));
+            float newT = bestTime[from] + findStreetSegmentTravelTime(seg) + penalty;
+            if(newT < bestTime[to]){
+                bestTime[to] = newT;
+                parent[to] = seg;
+                computeQ.emplace(newT, to);
             }
         }
     }
-
-    for (std::unordered_set<IntersectionIdx>::const_iterator it = target.begin(); it != target.end(); ++it) {
-        IntersectionIdx to = *it;
-        if (to == start || parent[to] == -1){
+    for(IntersectionIdx to: target){
+        if(to == start || parent[to] == -1){
             continue;
         }
         std::vector<StreetSegmentIdx> path;
-        IntersectionIdx curr = to;
-        while (curr != start) {
+        for(IntersectionIdx curr = to; curr != start;){
             StreetSegmentIdx seg = parent[curr];
             path.push_back(seg);
-            const StreetSegmentInfo& info = getStreetSegmentInfo(seg);
-            if (info.to == curr) curr = info.from;
-            else curr = info.to;
+            const auto& info = getStreetSegmentInfo(seg);
+            if(info.to == curr){
+                curr = info.from;
+            }
+            else{
+                curr = info.to;
+            }
         }
         std::reverse(path.begin(), path.end());
         result[to] = {bestTime[to], path};
@@ -95,12 +90,14 @@ void precomputePath(const std::vector<DeliveryInf> & deliveries, const std::vect
         nodes.insert(depots[i]);
     }
     std::vector<IntersectionIdx> nodeVector(nodes.begin(), nodes.end());
+    std::vector<std::unordered_map<IntersectionIdx, PathInfo>> local_maps(nodeVector.size());
     #pragma omp parallel for
-    for(int i = 0; i < nodeVector.size(); i++){
+    for (int i = 0; i < nodeVector.size(); i++) {
         IntersectionIdx from = nodeVector[i];
-        std::unordered_map<IntersectionIdx, PathInfo> result = dijkstra(from, nodes,turnPenalty);
-        #pragma omp critical
-        precompute[from] = std::move(result);
+        local_maps[i] = dijkstra(from, nodes, turnPenalty);
+    }
+    for (int i = 0; i < nodeVector.size(); i++) {
+        precompute[nodeVector[i]] = std::move(local_maps[i]);
     }
 }
 
@@ -301,8 +298,13 @@ std::vector<CourierSubPath> travelingCourier(const float turn_penalty,
     }
 
     // Optimize with local search
-    swapOrder(bestOrder, bestTime, bestDepot, deliveries, depots);
-    opt2Perturbation(bestOrder, bestTime, bestDepot, deliveries, depots);
+    bool improved = true;
+    while(improved){
+        float prevTime = bestTime;
+        swapOrder(bestOrder, bestTime, bestDepot, deliveries, depots);
+        opt2Perturbation(bestOrder, bestTime, bestDepot, deliveries, depots);
+        improved = (bestTime < prevTime - 0.1);
+    }
 
     // Build final route
     std::vector<CourierSubPath> route;
