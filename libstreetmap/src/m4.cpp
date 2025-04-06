@@ -101,89 +101,103 @@ void precomputePath(const std::vector<DeliveryInf> & deliveries, const std::vect
     }
 }
 
-void swapOrder(std::vector<int>& bestOrder, float& bestTime, IntersectionIdx bestDepot,const std::vector<DeliveryInf>& deliveries, const std::vector<IntersectionIdx>& depots) {
-    const int maxTrials = 5000;
+void swapOrder(std::vector<int>& bestOrder, float& bestTime, IntersectionIdx bestDepot,
+               const std::vector<DeliveryInf>& deliveries, const std::vector<IntersectionIdx>& depots) {
+    const int maxTrials = 40000;
+    int trials = 0;
     int size = bestOrder.size();
-    for (int trial = 0; trial < maxTrials; ++trial) {
+    while (trials < maxTrials) {
+        std::vector<int> tempOrder = bestOrder;
         int i = rand() % size;
         int j = rand() % size;
-        if (i == j) continue;
-        std::vector<int> candidate = bestOrder;
-        std::swap(candidate[i], candidate[j]);
-        std::unordered_set<int> picked;
+        while (j == i) j = rand() % size;
+        std::swap(tempOrder[i], tempOrder[j]);
+        std::unordered_set<int> pickedUp, droppedOff;
         IntersectionIdx curr = bestDepot;
-        float time = 0;
-        bool valid = true;
-        for (int idx : candidate) {
-            IntersectionIdx next = picked.count(idx) ? deliveries[idx].dropOff : deliveries[idx].pickUp;
+        float newTime = 0;
+        bool legal = true;
+        for (int idx : tempOrder) {
+            IntersectionIdx next;
+            if (pickedUp.count(idx)) {
+                next = deliveries[idx].dropOff;
+                droppedOff.insert(idx);
+            } else {
+                next = deliveries[idx].pickUp;
+                pickedUp.insert(idx);
+            }
             if (!precompute[curr].count(next)) {
-                valid = false;
+                legal = false;
                 break;
             }
-            time += precompute[curr][next].travel_time;
-            if (time > bestTime) {
-                valid = false;
+            newTime += precompute[curr][next].travel_time;
+            if (newTime > bestTime) {
+                legal = false;
                 break;
             }
             curr = next;
-            picked.insert(idx);
         }
-        if (!valid) continue;
+        if (!legal) {
+            trials++;
+            continue;
+        }
         float returnTime = std::numeric_limits<float>::max();
         for (const IntersectionIdx& depot : depots) {
             if (precompute[curr].count(depot)) {
                 float t = precompute[curr][depot].travel_time;
-                returnTime = std::min(returnTime, t);
+                if (t < returnTime) returnTime = t;
             }
         }
-        time += returnTime;
-        if (time < bestTime) {
-            bestOrder = candidate;
-            bestTime = time;
-            trial = 0; // reset trials after improvement
+        newTime += returnTime;
+        if (newTime < bestTime) {
+            bestOrder = tempOrder;
+            bestTime = newTime;
+            trials = 0;
+        } else {
+            trials++;
         }
     }
 }
 
-void opt2Perturbation(std::vector<int>& bestOrder, float& bestTime, IntersectionIdx bestDepot,const std::vector<DeliveryInf>& deliveries, const std::vector<IntersectionIdx>& depots) {
-    const int maxRounds = 10;
-    int size = bestOrder.size();
+void opt2Perturbation(std::vector<int>& bestOrder, float& bestTime, IntersectionIdx bestDepot,
+                      const std::vector<DeliveryInf>& deliveries, const std::vector<IntersectionIdx>& depots) {
+    const int maxRounds = 30;
     for (int round = 0; round < maxRounds; ++round) {
         bool improved = false;
-        for (int i = 0; i + 2 < size; ++i) {
-            for (int j = i + 2; j < std::min(i + 15, size); ++j) {
-                std::vector<int> candidate = bestOrder;
-                std::reverse(candidate.begin() + i, candidate.begin() + j + 1);
-                std::unordered_set<int> picked;
+        for (int i = 0; i + 2 < bestOrder.size(); i++) {
+            for (int j = i + 2; j < bestOrder.size() && j - i <= 20; j++) {
+                std::vector<int> newOrder = bestOrder;
+                std::reverse(newOrder.begin() + i, newOrder.begin() + j + 1);
+                std::unordered_set<int> pickedUp, droppedOff;
                 IntersectionIdx curr = bestDepot;
-                float time = 0;
+                float newTime = 0;
                 bool legal = true;
-                for (int idx : candidate) {
-                    IntersectionIdx next = picked.count(idx) ? deliveries[idx].dropOff : deliveries[idx].pickUp;
+                for (int idx : newOrder) {
+                    IntersectionIdx next = pickedUp.count(idx) ? deliveries[idx].dropOff : deliveries[idx].pickUp;
                     if (!precompute[curr].count(next)) {
                         legal = false;
                         break;
                     }
-                    time += precompute[curr][next].travel_time;
-                    if (time > bestTime) {
+                    newTime += precompute[curr][next].travel_time;
+                    if (newTime > bestTime) {
                         legal = false;
                         break;
                     }
                     curr = next;
-                    picked.insert(idx);
+                    if (pickedUp.count(idx)) droppedOff.insert(idx);
+                    else pickedUp.insert(idx);
                 }
                 if (!legal) continue;
                 float returnTime = std::numeric_limits<float>::max();
                 for (const IntersectionIdx& depot : depots) {
                     if (precompute[curr].count(depot)) {
                         float t = precompute[curr][depot].travel_time;
-                        returnTime = std::min(returnTime, t);
+                        if (t < returnTime) returnTime = t;
                     }
                 }
-                time += returnTime;
-                if (time < bestTime) {
-                    bestOrder = candidate;
-                    bestTime = time;
+                newTime += returnTime;
+                if (newTime < bestTime) {
+                    bestOrder = newOrder;
+                    bestTime = newTime;
                     improved = true;
                     break;
                 }
