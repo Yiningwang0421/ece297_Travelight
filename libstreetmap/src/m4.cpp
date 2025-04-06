@@ -225,7 +225,7 @@ std::vector<CourierSubPath> travelingCourier(const float turn_penalty,
             float minTime = std::numeric_limits<float>::max();
             IntersectionIdx next = -1;
 
-            for (int i = 0; i < deliveries.size(); i++) {
+            for (int i = 0; i < deliveries.size(); i++) { //If picked up but not dropped off yet
                 if (pickedUp.count(i) && !droppedOff.count(i)) {
                     IntersectionIdx drop = deliveries[i].dropOff;
                     if (precompute[curr].count(drop)) {
@@ -239,7 +239,7 @@ std::vector<CourierSubPath> travelingCourier(const float turn_penalty,
                 }
             }
 
-            if (bestIdx == -1) {
+            //if (bestIdx == -1) {//Nowhere to drop off
                 for (int i = 0; i < deliveries.size(); i++) {
                     if (!pickedUp.count(i)) {
                         IntersectionIdx pick = deliveries[i].pickUp;
@@ -253,7 +253,7 @@ std::vector<CourierSubPath> travelingCourier(const float turn_penalty,
                         }
                     }
                 }
-            }
+            //}
 
             if (bestIdx == -1) {
                 valid = false;
