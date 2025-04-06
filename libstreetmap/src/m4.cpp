@@ -279,11 +279,50 @@ std::vector<CourierSubPath> travelingCourier(const float turn_penalty, const std
         if (!RandomGreedyOptimized(deliveries, depots, order, depot, time))
             continue;
 
-        for (int i = 0; i < 3; ++i) {
-            float prev = time;
-            swapOrder(order, time, depot, deliveries, depots);
-            opt2Perturbation(order, time, depot, deliveries, depots);
-            if (time >= prev - 0.1f) break;
+        while (droppedOff.size() < deliveries.size()) {
+            int bestIdx = -1;
+            float minTime = std::numeric_limits<float>::max();
+            IntersectionIdx next = -1;
+
+            for (int i = 0; i < deliveries.size(); i++) { //If picked up but not dropped off yet
+                if (pickedUp.count(i) && !droppedOff.count(i)) {
+                    IntersectionIdx drop = deliveries[i].dropOff;
+                    if (precompute[curr].count(drop)) {
+                        float t = precompute[curr][drop].travel_time;
+                        if (t < minTime) {
+                            minTime = t;
+                            bestIdx = i;
+                            next = drop;
+                        }
+                    }
+                }
+            }
+
+            //if (bestIdx == -1) {//Nowhere to drop off
+                for (int i = 0; i < deliveries.size(); i++) {
+                    if (!pickedUp.count(i)) {
+                        IntersectionIdx pick = deliveries[i].pickUp;
+                        if (precompute[curr].count(pick)) {
+                            float t = precompute[curr][pick].travel_time;
+                            if (t < minTime) {
+                                minTime = t;
+                                bestIdx = i;
+                                next = pick;
+                            }
+                        }
+                    }
+                }
+            //}
+
+            if (bestIdx == -1) {
+                valid = false;
+                break;
+            }
+
+            order.push_back(bestIdx);
+            if (pickedUp.count(bestIdx)) droppedOff.insert(bestIdx);
+            else pickedUp.insert(bestIdx);
+            curr = next;
         }
         if (time < bestTime) {
             bestTime = time;
