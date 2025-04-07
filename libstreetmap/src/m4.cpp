@@ -289,6 +289,9 @@ void simulatedAnnealing(std::vector<int>& bestOrder, float& bestTime, Intersecti
     }
 }
 
+
+
+
 void multiStartParallel(std::vector<int>& bestOrder, float& bestTime, IntersectionIdx& bestDepot,
                         const std::vector<DeliveryInf>& deliveries, const std::vector<IntersectionIdx>& depots,
                         float turn_penalty, int numThreads) {
@@ -378,7 +381,7 @@ void multiStartParallel(std::vector<int>& bestOrder, float& bestTime, Intersecti
         // Run local optimizations
         swapOrder(order, time, localDepot, deliveries, depots);
         opt2Perturbation(order, time, localDepot, deliveries, depots);
-        simulatedAnnealing(order, time, localDepot, deliveries, depots);
+        //simulatedAnnealing(order, time, localDepot, deliveries, depots);
 
         #pragma omp critical
         {
@@ -404,12 +407,12 @@ std::vector<CourierSubPath> travelingCourier(const float turn_penalty,
     // Run multi-threaded optimization
     multiStartParallel(bestOrder, bestTime, bestDepot, deliveries, depots, turn_penalty, 8); // 8 threads
 
-    // Optional final polish
+    // Final polish
     bool improved = true;
     while(improved){
         float prevTime = bestTime;
-        swapOrder(bestOrder, bestTime, bestDepot, deliveries, depots);
-        opt2Perturbation(bestOrder, bestTime, bestDepot, deliveries, depots);
+        //swapOrder(bestOrder, bestTime, bestDepot, deliveries, depots);
+        //opt2Perturbation(bestOrder, bestTime, bestDepot, deliveries, depots);
         simulatedAnnealing(bestOrder, bestTime, bestDepot, deliveries, depots);
         improved = (bestTime < prevTime - 0.1);
     }
