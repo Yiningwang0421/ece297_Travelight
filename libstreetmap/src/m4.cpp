@@ -199,10 +199,12 @@ std::vector<VisitNode> generateLegalGreedyRoute(const std::vector<DeliveryInf>& 
 }
 
 void swapOrder(std::vector<VisitNode>& bestOrder, float& bestTime, IntersectionIdx bestDepot, const std::vector<DeliveryInf>& deliveries, const std::vector<IntersectionIdx>& depots){
-    const int maxTrials = 40000;
+    const int maxTrials = 100000;
     int trials = 0;
     int size = bestOrder.size();
     std::vector<VisitNode> tempOrder;
+    float temperature = 1000;
+    float cost = 99999999;
     
     while(trials < maxTrials){
         tempOrder = bestOrder;
@@ -213,13 +215,19 @@ void swapOrder(std::vector<VisitNode>& bestOrder, float& bestTime, IntersectionI
         std::swap(tempOrder[i], tempOrder[j]);
         for(int k=0; k<depots.size(); k++){
             float newTime = evaluatePath(tempOrder, depots[k], depots);
-            if (newTime < bestTime) {
+            if (newTime != std::numeric_limits<float>::max()){
+                cost = newTime - bestTime;
+            }
+            if (newTime < bestTime || static_cast<float>(rand()) / RAND_MAX < std::exp(-cost/temperature)) {
                 bestOrder = tempOrder;
                 bestTime = newTime;
-                trials = 0;
+                if (cost < 0)
+                    trials = 0;
             } else {
                 trials++;
-            }        
+            }
+            cost = 99999999;
+            temperature = temperature * 0.98;
         }        
     }
     
@@ -246,7 +254,7 @@ void swapOrder(std::vector<VisitNode>& bestOrder, float& bestTime, IntersectionI
                 trials = 0;
             } else{
                 trials++;
-            }        
+            }
         }        
     }
 
