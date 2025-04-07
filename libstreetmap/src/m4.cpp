@@ -409,7 +409,7 @@ Candidate runGreedyAndImprove(const std::vector<DeliveryInf>& deliveries, const 
     Candidate c;
     buildGreedyOrder(c.order, c.time, c.depot, deliveries, depots);
 
-    simulatedAnnealing(c.order, c.time, c.depot, deliveries, depots);  
+    //simulatedAnnealing(c.order, c.time, c.depot, deliveries, depots);  
 
     swapOrder(c.order, c.time, c.depot, deliveries, depots);           
     opt2Perturbation(c.order, c.time, c.depot, deliveries, depots);    
@@ -417,7 +417,7 @@ Candidate runGreedyAndImprove(const std::vector<DeliveryInf>& deliveries, const 
     return c;
 }
 
-void simulatedAnnealing(std::vector<int>& order, float& time, IntersectionIdx depot,
+/*void simulatedAnnealing(std::vector<int>& order, float& time, IntersectionIdx depot,
                         const std::vector<DeliveryInf>& deliveries,
                         const std::vector<IntersectionIdx>& depots) {
     const float initialTemp = 300.0f;
@@ -465,4 +465,4 @@ void simulatedAnnealing(std::vector<int>& order, float& time, IntersectionIdx de
 
     order = bestOrder;
     time = bestTime;
-}
+}*/
