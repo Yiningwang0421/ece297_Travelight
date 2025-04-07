@@ -27,6 +27,10 @@ std::unordered_map<IntersectionIdx, PathInfo> dijkstra(IntersectionIdx start, co
 void precomputePath(const std::vector<DeliveryInf> & deliveries, const std::vector<IntersectionIdx>& depots, float turnPenalty);
 float evaluatePath(const std::vector<int>& order, IntersectionIdx depot, const std::vector<DeliveryInf>& deliveries, const std::vector<IntersectionIdx>& depots);
 std::vector<VisitNode> generateLegalGreedyRoute(const std::vector<DeliveryInf>& deliveries, const std::vector<IntersectionIdx>& depots, IntersectionIdx& bestDepotOut);
+std::vector<VisitNode> threeOptVisit(const std::vector<VisitNode>& order,
+                                     IntersectionIdx depot,
+                                     const std::vector<DeliveryInf>& deliveries,
+                                     const std::vector<IntersectionIdx>& depots);
 
 std::unordered_map<IntersectionIdx, PathInfo> dijkstra(IntersectionIdx start,const std::unordered_set<IntersectionIdx>& targets,float turnPenalty) {
     std::unordered_map<IntersectionIdx, PathInfo> result;
@@ -324,6 +328,134 @@ std::vector<CourierSubPath> buildCourierRoute(const std::vector<VisitNode>& visi
     return route;
 }
 
+bool isLegalVisitOrder(const std::vector<VisitNode>& order) {
+    std::unordered_map<int, bool> pickedUp; 
+    for (const auto &node : order) {
+        if (pickedUp.find(node.deliveryIdx) == pickedUp.end()) {
+            
+            if (!node.isPickup) return false;
+            pickedUp[node.deliveryIdx] = true;
+        } else {
+           
+            if (node.isPickup) return false;
+        }
+    }
+    return true;
+}
+
+std::vector<VisitNode> threeOptVisit(const std::vector<VisitNode>& order,
+                                     IntersectionIdx depot,
+                                     const std::vector<DeliveryInf>& deliveries,
+                                     const std::vector<IntersectionIdx>& depots) {
+    std::vector<VisitNode> bestOrder = order;
+    float bestCost = evaluatePath(order, depot, depots);
+    bool improvement = true;
+    int n = bestOrder.size();
+    if(n < 4) return bestOrder;  
+
+    while (improvement) {
+        improvement = false;
+        for (int i = 1; i < n - 2; i++) {
+            for (int j = i + 1; j < n - 1; j++) {
+                for (int k = j + 1; k < n; k++) {
+                    // 将路径分为四段：
+                    // S1 = bestOrder[0, i)
+                    // S2 = bestOrder[i, j)
+                    // S3 = bestOrder[j, k)
+                    // S4 = bestOrder[k, n)
+                    std::vector<VisitNode> S1(bestOrder.begin(), bestOrder.begin() + i);
+                    std::vector<VisitNode> S2(bestOrder.begin() + i, bestOrder.begin() + j);
+                    std::vector<VisitNode> S3(bestOrder.begin() + j, bestOrder.begin() + k);
+                    std::vector<VisitNode> S4(bestOrder.begin() + k, bestOrder.end());
+                    
+                    std::vector<std::vector<VisitNode>> candidates;
+                    
+                    // Option 1: Reverse S2：S1 + reverse(S2) + S3 + S4
+                    {
+                        std::vector<VisitNode> candidate = S1;
+                        std::vector<VisitNode> revS2 = S2;
+                        std::reverse(revS2.begin(), revS2.end());
+                        candidate.insert(candidate.end(), revS2.begin(), revS2.end());
+                        candidate.insert(candidate.end(), S3.begin(), S3.end());
+                        candidate.insert(candidate.end(), S4.begin(), S4.end());
+                        candidates.push_back(candidate);
+                    }
+                    // Option 2: Reverse S3：S1 + S2 + reverse(S3) + S4
+                    {
+                        std::vector<VisitNode> candidate = S1;
+                        candidate.insert(candidate.end(), S2.begin(), S2.end());
+                        std::vector<VisitNode> revS3 = S3;
+                        std::reverse(revS3.begin(), revS3.end());
+                        candidate.insert(candidate.end(), revS3.begin(), revS3.end());
+                        candidate.insert(candidate.end(), S4.begin(), S4.end());
+                        candidates.push_back(candidate);
+                    }
+                    // Option 3: Reverse S2 和 S3：S1 + reverse(S2) + reverse(S3) + S4
+                    {
+                        std::vector<VisitNode> candidate = S1;
+                        std::vector<VisitNode> revS2 = S2, revS3 = S3;
+                        std::reverse(revS2.begin(), revS2.end());
+                        std::reverse(revS3.begin(), revS3.end());
+                        candidate.insert(candidate.end(), revS2.begin(), revS2.end());
+                        candidate.insert(candidate.end(), revS3.begin(), revS3.end());
+                        candidate.insert(candidate.end(), S4.begin(), S4.end());
+                        candidates.push_back(candidate);
+                    }
+                    // Option 4: Swap S2 和 S3：S1 + S3 + S2 + S4
+                    {
+                        std::vector<VisitNode> candidate = S1;
+                        candidate.insert(candidate.end(), S3.begin(), S3.end());
+                        candidate.insert(candidate.end(), S2.begin(), S2.end());
+                        candidate.insert(candidate.end(), S4.begin(), S4.end());
+                        candidates.push_back(candidate);
+                    }
+                    // Option 5: S1 + S3 + reverse(S2) + S4
+                    {
+                        std::vector<VisitNode> candidate = S1;
+                        candidate.insert(candidate.end(), S3.begin(), S3.end());
+                        std::vector<VisitNode> revS2 = S2;
+                        std::reverse(revS2.begin(), revS2.end());
+                        candidate.insert(candidate.end(), revS2.begin(), revS2.end());
+                        candidate.insert(candidate.end(), S4.begin(), S4.end());
+                        candidates.push_back(candidate);
+                    }
+                    // Option 6: S1 + reverse(S3) + S2 + S4
+                    {
+                        std::vector<VisitNode> candidate = S1;
+                        std::vector<VisitNode> revS3 = S3;
+                        std::reverse(revS3.begin(), revS3.end());
+                        candidate.insert(candidate.end(), revS3.begin(), revS3.end());
+                        candidate.insert(candidate.end(), S2.begin(), S2.end());
+                        candidate.insert(candidate.end(), S4.begin(), S4.end());
+                        candidates.push_back(candidate);
+                    }
+                    // Option 7: 同 Option 5（可选）
+                    {
+                        std::vector<VisitNode> candidate = S1;
+                        candidate.insert(candidate.end(), S3.begin(), S3.end());
+                        std::vector<VisitNode> revS2 = S2;
+                        std::reverse(revS2.begin(), revS2.end());
+                        candidate.insert(candidate.end(), revS2.begin(), revS2.end());
+                        candidate.insert(candidate.end(), S4.begin(), S4.end());
+                        candidates.push_back(candidate);
+                    }
+                    
+                    for (const auto& cand : candidates) {
+                        if (!isLegalVisitOrder(cand)) continue; 
+                        float candCost = evaluatePath(cand, depot, depots);
+                        if (candCost < bestCost) {
+                            bestCost = candCost;
+                            bestOrder = cand;
+                            improvement = true;
+                        }
+                    }
+                }
+            }
+        }
+    }
+    return bestOrder;
+}
+
 std::vector<CourierSubPath> travelingCourier(const float turn_penalty,const std::vector<DeliveryInf>& deliveries,const std::vector<IntersectionIdx>& depots) {
     precompute.clear();
     precomputePath(deliveries, depots, turn_penalty);
@@ -336,3 +468,4 @@ std::vector<CourierSubPath> travelingCourier(const float turn_penalty,const std:
     opt2Perturbation(bestOrder, bestTime, bestDepot, depots);
     return buildCourierRoute(bestOrder, bestDepot, depots);
 }
+
