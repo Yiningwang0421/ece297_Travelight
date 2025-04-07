@@ -9,7 +9,6 @@
 #include <set>
 #include <omp.h>
 #include <queue>
-#include <random>
 
 struct PathInfo{
     float travel_time;
@@ -21,12 +20,11 @@ struct VisitNode {
     bool isPickup;
     int deliveryIdx;
 };
-
 std::unordered_map<IntersectionIdx, std::unordered_map<IntersectionIdx, PathInfo>> precompute;
 std::unordered_map<IntersectionIdx, PathInfo> dijkstra(IntersectionIdx start, const std::unordered_set<IntersectionIdx>& target, float turnPenalty);
 void precomputePath(const std::vector<DeliveryInf> & deliveries, const std::vector<IntersectionIdx>& depots, float turnPenalty);
 float evaluatePath(const std::vector<int>& order, IntersectionIdx depot, const std::vector<DeliveryInf>& deliveries, const std::vector<IntersectionIdx>& depots);
-std::vector<VisitNode> generateLegalGreedyRoute(const std::vector<DeliveryInf>& deliveries, const std::vector<IntersectionIdx>& depots, IntersectionIdx& bestDepotOut);
+std::vector<VisitNode> GreedyHeuristic(const std::vector<DeliveryInf>& deliveries, const std::vector<IntersectionIdx>& depots, IntersectionIdx& bestDepotOut);
 
 std::unordered_map<IntersectionIdx, PathInfo> dijkstra(IntersectionIdx start, const std::unordered_set<IntersectionIdx>& target, float turnPenalty) {
     std::unordered_map<IntersectionIdx, PathInfo> result;
@@ -99,10 +97,10 @@ void precomputePath(const std::vector<DeliveryInf> & deliveries, const std::vect
     std::vector<IntersectionIdx> nodeList(nodes.begin(), nodes.end());
     std::vector<std::unordered_map<IntersectionIdx, PathInfo>> local_maps(nodeList.size());
     #pragma omp parallel for
-    for (int i = 0; i < nodeList.size(); i++) {
+    for (int i = 0; i < nodeList.size(); ++i) {
         local_maps[i] = dijkstra(nodeList[i], nodes, turnPenalty);
     }
-    for (int i = 0; i < nodeList.size(); i++) {
+    for (int i = 0; i < nodeList.size(); ++i) {
         precompute[nodeList[i]] = std::move(local_maps[i]);
     }
 }
@@ -111,88 +109,93 @@ float evaluatePath(const std::vector<VisitNode>& order, IntersectionIdx depot, c
     std::unordered_set<int> pickedUp;
     IntersectionIdx curr = depot;
     float totalTime = 0;
-    for (const auto& v : order) {
-        if (!v.isPickup && pickedUp.find(v.deliveryIdx) == pickedUp.end()) {
-            return 99999.0; // illegal dropoff
+    for(int i = 0; i < order.size(); i++){
+        if(order[i].isPickup == false && pickedUp.find(order[i].deliveryIdx) == pickedUp.end()){
+            return 999999;
         }
-        totalTime += precompute[curr][v.id].travel_time;
-        curr = v.id;
-        if (v.isPickup) pickedUp.insert(v.deliveryIdx);
+        totalTime += precompute[curr][order[i].id].travel_time;
+        curr = order[i].id;
+        if(order[i].isPickup == true){
+            pickedUp.insert(order[i].deliveryIdx);
+        }
     }
-    float returnT = std::numeric_limits<float>::max();
+    float returnT = 999999;
     for (IntersectionIdx d : depots) {
-        if (precompute[curr].count(d)) {
+        if (precompute[curr].find(d) != precompute[curr].end()) {
             float t = precompute[curr][d].travel_time;
-            if (t < returnT){
-                returnT = t;
-            }
+            if (t < returnT) returnT = t;
         }
     }
     return totalTime + returnT;
 }
 
-std::vector<VisitNode> generateLegalGreedyRoute(const std::vector<DeliveryInf>& deliveries, const std::vector<IntersectionIdx>& depots, IntersectionIdx& bestDepotOut){
+std::vector<VisitNode> GreedyHeuristic(const std::vector<DeliveryInf>& deliveries, const std::vector<IntersectionIdx>& depots, IntersectionIdx& bestDepotOut){
     std::vector<VisitNode> bestRoute;
     float bestTime = 999999.0;
-
-    for (const auto& depot : depots) {
-        std::unordered_set<int> pickedUp, droppedOff;
+    for(int depotIdx = 0; depotIdx  < depots.size(); depotIdx++){
+        std::unordered_set<int> pickedUp;
+        std::unordered_set<int> droppedOff;
         std::vector<VisitNode> route;
-        IntersectionIdx curr = depot;
+        IntersectionIdx curr = depots[depotIdx];
         float totalTime = 0;
-
         while (route.size() < deliveries.size() * 2) {
-            float min = std::numeric_limits<float>::max();
+            float minT = 999999;
             VisitNode bestMove;
             bool found = false;
             for (int i = 0; i < deliveries.size(); ++i) {
-                if (pickedUp.count(i) == false) { // not yet picked up
+                //next node is pickup
+                if (pickedUp.count(i) == 0) {
                     IntersectionIdx next = deliveries[i].pickUp;
-                    if (precompute.count(curr) && precompute.at(curr).count(next)) {
-                        float t = precompute.at(curr).at(next).travel_time;
-                        if (t < min) {
-                            min = t;
+                    if (precompute.count(curr) > 0 && precompute[curr].count(next) > 0) {
+                        float t = precompute[curr][next].travel_time;
+                        if (t < minT) {
+                            minT = t;
                             bestMove = {next, true, i};
                             found = true;
                         }
                     }
                 } 
-                else if (droppedOff.count(i) == false) { // not yet dropped off
+                //not pickup, check if it's dropoff
+                else if (droppedOff.count(i) == 0){
                     IntersectionIdx next = deliveries[i].dropOff;
-                    if (precompute.count(curr) && precompute.at(curr).count(next)) {
-                        float t = precompute.at(curr).at(next).travel_time;
-                        if (t < min) {
-                            min = t;
+                    if (precompute.count(curr) > 0 && precompute[curr].count(next) > 0) {
+                        float t = precompute[curr][next].travel_time;
+                        if (t < minT) {
+                            minT = t;
                             bestMove = {next, false, i};
                             found = true;
                         }
                     }
                 }
             }
-            if (!found) break;
-            totalTime += min;
+            if (!found){ break;}
+            totalTime += minT;
             route.push_back(bestMove);
             curr = bestMove.id;
-            if (bestMove.isPickup) pickedUp.insert(bestMove.deliveryIdx);
-            else droppedOff.insert(bestMove.deliveryIdx);
-        }
-
-        float retT = 99999.0;
-        for (const auto& d : depots) {
-            float t = precompute[curr][d].travel_time;
-            if (t < retT){
-                retT = t;
+            if (bestMove.isPickup){
+                pickedUp.insert(bestMove.deliveryIdx);
+            }
+            else{
+                droppedOff.insert(bestMove.deliveryIdx);
             }
         }
 
-        totalTime += retT;
+        float minT = 999999;
+        for(int i = 0; i < depots.size(); i++){
+            if(precompute.count(depots[i]) >= 0 && precompute[curr].count(depots[i]) > 0){
+                float t = precompute[curr][depots[i]].travel_time;
+                if(t < minT){
+                    minT = t;
+                }
+            }
+        }
+        totalTime += minT;
         if (route.size() == deliveries.size() * 2 && totalTime < bestTime) {
             bestTime = totalTime;
-            bestDepotOut = depot;
+            bestDepotOut = depots[depotIdx];
             bestRoute = route;
         }
     }
-
     return bestRoute;
 }
 
@@ -208,8 +211,12 @@ void swapOrder(std::vector<VisitNode>& bestOrder, float& bestTime, IntersectionI
         tempOrder = bestOrder;
         int i = rand()%size;
         int j = rand()%size;
-        while (j == i) j = rand() % size;
-        if (i > j) std::swap(i, j);
+        while (j == i){
+            j = rand() % size;
+        }
+        if (i > j){
+            std::swap(i, j);
+        }
         std::swap(tempOrder[i], tempOrder[j]);
         for(int k=0; k<depots.size(); k++){
             float newTime = evaluatePath(tempOrder, depots[k], depots);
@@ -235,10 +242,16 @@ void swapOrder(std::vector<VisitNode>& bestOrder, float& bestTime, IntersectionI
         int i = rand()%size;
         int j = rand()%size;
         int m = rand()%size;
-        while (j == i) j = rand() % size;
-        if (i > j) std::swap(i, j);
+        while (j == i){
+            j = rand() % size;
+        }
+        if (i > j){
+            std::swap(i, j);
+        }
         int len = j - i;
-        while (!(m + len <= size)) m = rand()%size;
+        while (!(m + len <= size)){
+            m = rand()%size;
+        }
         std::swap_ranges(tempOrder.begin() + i, tempOrder.begin() + j, tempOrder.begin() + m);
         for(int k=0; k<depots.size(); k++){
             float newTime = evaluatePath(tempOrder, depots[k], depots);
@@ -250,19 +263,21 @@ void swapOrder(std::vector<VisitNode>& bestOrder, float& bestTime, IntersectionI
                 bestOrder = tempOrder;
                 bestTime = newTime;
                 trials = 0;
-            } else{
+            } 
+            else{
                 trials++;
             }
         }        
     }
-
 }
 
 void opt2Perturbation(std::vector<VisitNode>& bestOrder, float& bestTime, IntersectionIdx bestDepot, const std::vector<IntersectionIdx>& depots) {
-    for (int round = 0; round < 30; ++round) {
+    const int maxRounds = 30;
+    const int maxWindowSize = 20;
+    for (int round = 0; round < maxRounds; ++round) {
         bool improved = false;
         for (int i = 0; i + 2 < bestOrder.size(); ++i) {
-            for (int j = i + 2; j < bestOrder.size() && j - i <= 20; ++j) {
+            for (int j = i + 2; j < bestOrder.size() && j - i <= maxWindowSize; ++j) {
                 std::vector<VisitNode> trialOrder = bestOrder;
                 std::reverse(trialOrder.begin() + i, trialOrder.begin() + j + 1);
                 std::unordered_set<int> pickedUp;
@@ -272,9 +287,11 @@ void opt2Perturbation(std::vector<VisitNode>& bestOrder, float& bestTime, Inters
                         legal = false;
                         break;
                     }
-                    if (v.isPickup) pickedUp.insert(v.deliveryIdx);
+                    if (v.isPickup) {
+                        pickedUp.insert(v.deliveryIdx);
+                    }
                 }
-                if (!legal){continue;}
+                if (!legal) continue;
                 float trialTime = evaluatePath(trialOrder, bestDepot, depots);
                 if (trialTime < bestTime) {
                     bestOrder = trialOrder;
@@ -292,21 +309,16 @@ void opt2Perturbation(std::vector<VisitNode>& bestOrder, float& bestTime, Inters
 std::vector<CourierSubPath> buildCourierRoute(const std::vector<VisitNode>& visitList, IntersectionIdx startDepot, const std::vector<IntersectionIdx>& depots) {
     std::vector<CourierSubPath> route;
     IntersectionIdx curr = startDepot;
-    for(int i = 0; i < visitList.size(); i++){
-        VisitNode node = visitList[i];
-        if(precompute.count(curr) == false || precompute[curr].count(node.id) == false){
+    for (const auto& v : visitList) {
+        if (!precompute.count(curr) || !precompute[curr].count(v.id)){
             return {};
         }
-        std::vector<StreetSegmentIdx> path = precompute[curr][node.id].path;
-        route.push_back({{curr, node.id}, path});
-        curr = node.id;
+        const auto& path = precompute[curr][v.id].path;
+        route.push_back({{curr, v.id}, path});
+        curr = v.id;
     }
     float bestReturn = 99999.0;
     IntersectionIdx bestEndDepot = depots[0];
-    for(int i = 0; i < depots.size(); i++){
-        float time = precompute[curr][i].travel_time;
-
-    }
     for (const auto& d : depots) {
         float t = precompute[curr][d].travel_time;
         if (t < bestReturn) {
@@ -324,10 +336,12 @@ std::vector<CourierSubPath> travelingCourier(const float turn_penalty,const std:
     precomputePath(deliveries, depots, turn_penalty);
 
     IntersectionIdx bestDepot;
-    std::vector<VisitNode> bestOrder = generateLegalGreedyRoute(deliveries, depots, bestDepot);
+    std::vector<VisitNode> bestOrder = GreedyHeuristic(deliveries, depots, bestDepot);
     float bestTime = evaluatePath(bestOrder, bestDepot, depots);
     //optimization
-    swapOrder(bestOrder, bestTime, bestDepot, deliveries, depots);
-    opt2Perturbation(bestOrder, bestTime, bestDepot, depots);
+    for(int i = 0; i < 3; i++){
+        swapOrder(bestOrder, bestTime, bestDepot, deliveries, depots);
+        opt2Perturbation(bestOrder, bestTime, bestDepot, depots);
+    }
     return buildCourierRoute(bestOrder, bestDepot, depots);
 }
