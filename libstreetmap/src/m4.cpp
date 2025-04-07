@@ -103,74 +103,76 @@ void precomputePath(const std::vector<DeliveryInf> & deliveries, const std::vect
     }
 }
 
-void swapOrder(std::vector<int>& bestOrder, float& bestTime, IntersectionIdx bestDepot, const std::vector<DeliveryInf>& deliveries, const std::vector<IntersectionIdx>& depots){
-    int maxSwap = 10000;
-    int count = 0;
-    for (int i = 0; i + 1 < bestOrder.size(); i++) {
-        for (int j = i + 1; j < bestOrder.size(); j++) {
-            if(++count > maxSwap){
-                return;
+void swapOrder(std::vector<int>& bestOrder, float& bestTime, IntersectionIdx bestDepot,
+               const std::vector<DeliveryInf>& deliveries, const std::vector<IntersectionIdx>& depots) {
+    const int maxTrials = 40000;
+    int trials = 0;
+    int size = bestOrder.size();
+    while (trials < maxTrials) {
+        std::vector<int> tempOrder = bestOrder;
+        int i = rand() % size;
+        int j = rand() % size;
+        while (j == i) j = rand() % size;
+        std::swap(tempOrder[i], tempOrder[j]);
+        std::unordered_set<int> pickedUp, droppedOff;
+        IntersectionIdx curr = bestDepot;
+        float newTime = 0;
+        bool legal = true;
+        for (int idx : tempOrder) {
+            IntersectionIdx next;
+            if (pickedUp.count(idx)) {
+                next = deliveries[idx].dropOff;
+                droppedOff.insert(idx);
+            } else {
+                next = deliveries[idx].pickUp;
+                pickedUp.insert(idx);
             }
-            std::vector<int> temp = bestOrder;
-            std::swap(temp[i], temp[j]);
-            std::unordered_set<int> pickedUp, droppedOff;
-            IntersectionIdx curr = bestDepot;
-            float newTime = 0;
-            bool valid = true;
-
-            for (int idx : temp) {
-                IntersectionIdx next = pickedUp.count(idx) ? deliveries[idx].dropOff : deliveries[idx].pickUp;
-                if (!precompute[curr].count(next)) {
-                    valid = false;
-                    break;
-                }
-                newTime += precompute[curr][next].travel_time;
-                if(newTime > bestTime){
-                    valid = false;
-                    break;
-                }
-                curr = next;
-                if (pickedUp.count(idx)){
-                    droppedOff.insert(idx);
-                }
-                else {
-                    pickedUp.insert(idx);
-                }
+            if (!precompute[curr].count(next)) {
+                legal = false;
+                break;
             }
-            if(!valid){continue;}
-
-            float returnTime = std::numeric_limits<float>::max();
-            for (const IntersectionIdx& depot : depots) {
-                if (precompute[curr].count(depot)) {
-                    float t = precompute[curr][depot].travel_time;
-                    if (t < returnTime) returnTime = t;
-                }
+            newTime += precompute[curr][next].travel_time;
+            if (newTime > bestTime) {
+                legal = false;
+                break;
             }
-
-            newTime += returnTime;
-            if (valid && newTime < bestTime) {
-                bestTime = newTime;
-                bestOrder = temp;
+            curr = next;
+        }
+        if (!legal) {
+            trials++;
+            continue;
+        }
+        float returnTime = std::numeric_limits<float>::max();
+        for (const IntersectionIdx& depot : depots) {
+            if (precompute[curr].count(depot)) {
+                float t = precompute[curr][depot].travel_time;
+                if (t < returnTime) returnTime = t;
             }
+        }
+        newTime += returnTime;
+        if (newTime < bestTime) {
+            bestOrder = tempOrder;
+            bestTime = newTime;
+            trials = 0;
+        } else {
+            trials++;
         }
     }
 }
 
-void opt2Perturbation(std::vector<int>& bestOrder, float& bestTime, IntersectionIdx bestDepot, const std::vector<DeliveryInf>& deliveries, const std::vector<IntersectionIdx>& depots){
-    bool improve = true;
-    int iteration = 0;
-    int maxIterations = 300;
-    while (improve && iteration++ < maxIterations) {
-        improve = false;
+void opt2Perturbation(std::vector<int>& bestOrder, float& bestTime, IntersectionIdx bestDepot,
+                      const std::vector<DeliveryInf>& deliveries, const std::vector<IntersectionIdx>& depots) {
+    const int maxRounds = 30;
+    for (int round = 0; round < maxRounds; ++round) {
+        bool improved = false;
         for (int i = 0; i + 2 < bestOrder.size(); i++) {
-            for (int j = i + 2; j < bestOrder.size()  && j - i <= 10; j++) {
+            for (int j = i + 2; j < bestOrder.size() && j - i <= 20; j++) {
                 std::vector<int> newOrder = bestOrder;
                 std::reverse(newOrder.begin() + i, newOrder.begin() + j + 1);
                 std::unordered_set<int> pickedUp, droppedOff;
                 IntersectionIdx curr = bestDepot;
                 float newTime = 0;
                 bool legal = true;
-
                 for (int idx : newOrder) {
                     IntersectionIdx next = pickedUp.count(idx) ? deliveries[idx].dropOff : deliveries[idx].pickUp;
                     if (!precompute[curr].count(next)) {
@@ -178,13 +180,15 @@ void opt2Perturbation(std::vector<int>& bestOrder, float& bestTime, Intersection
                         break;
                     }
                     newTime += precompute[curr][next].travel_time;
+                    if (newTime > bestTime) {
+                        legal = false;
+                        break;
+                    }
                     curr = next;
                     if (pickedUp.count(idx)) droppedOff.insert(idx);
                     else pickedUp.insert(idx);
                 }
-
                 if (!legal) continue;
-
                 float returnTime = std::numeric_limits<float>::max();
                 for (const IntersectionIdx& depot : depots) {
                     if (precompute[curr].count(depot)) {
@@ -192,17 +196,17 @@ void opt2Perturbation(std::vector<int>& bestOrder, float& bestTime, Intersection
                         if (t < returnTime) returnTime = t;
                     }
                 }
-
                 newTime += returnTime;
                 if (newTime < bestTime) {
-                    bestTime = newTime;
                     bestOrder = newOrder;
-                    improve = true;
+                    bestTime = newTime;
+                    improved = true;
                     break;
                 }
             }
-            if (improve) break;
+            if (improved) break;
         }
+        if (!improved) break;
     }
 }
 
