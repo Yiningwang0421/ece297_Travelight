@@ -15,6 +15,17 @@ struct PathInfo{
     std::vector<StreetSegmentIdx> path;
 };
 
+struct Candidate {
+    std::vector<int> order;
+    IntersectionIdx depot;
+    float cost;
+
+    Candidate() : depot(-1), cost(std::numeric_limits<float>::max()) {}
+
+    Candidate(const std::vector<int>& order_, IntersectionIdx depot_, float cost_)
+        : order(order_), depot(depot_), cost(cost_) {}
+};
+
 std::unordered_map<IntersectionIdx, std::unordered_map<IntersectionIdx, PathInfo>> precompute;
 std::unordered_map<IntersectionIdx, PathInfo> dijkstra(IntersectionIdx start, const std::unordered_set<IntersectionIdx>& target, float turnPenalty);
 void precomputePath(const std::vector<DeliveryInf>& deliveries, const std::vector<IntersectionIdx>& depots, float turnPenalty);
@@ -33,6 +44,11 @@ std::vector<CourierSubPath> buildFinalRoute(const std::vector<int>& order,
                                             IntersectionIdx startDepot,
                                             const std::vector<DeliveryInf>& deliveries,
                                             const std::vector<IntersectionIdx>& depots);
+Candidate runGreedyPlusPlus(const Candidate& base,
+                             const std::vector<DeliveryInf>& deliveries,
+                             const std::vector<IntersectionIdx>& depots);
+std::vector<Candidate> generateCandidates(const std::vector<DeliveryInf>& deliveries,
+                                          const std::vector<IntersectionIdx>& depots);
 
 std::unordered_map<IntersectionIdx, PathInfo> dijkstra(IntersectionIdx start,const std::unordered_set<IntersectionIdx>& target,float turnPenalty){
     std::unordered_map<IntersectionIdx, PathInfo> result;
@@ -331,21 +347,19 @@ std::vector<CourierSubPath> travelingCourier(
     precompute.clear();
     precomputePath(deliveries, depots, turn_penalty);
 
-    std::vector<int> bestOrder;
-    float bestTime;
-    IntersectionIdx bestDepot;
+    std::vector<Candidate> candidates = generateCandidates(deliveries, depots);
 
-    buildGreedyOrder(bestOrder, bestTime, bestDepot, deliveries, depots);
-
-    bool improved = true;
-    while (improved) {
-        float prev = bestTime;
-        swapOrder(bestOrder, bestTime, bestDepot, deliveries, depots);
-        opt2Perturbation(bestOrder, bestTime, bestDepot, deliveries, depots);
-        improved = (bestTime < prev - 0.1);
+    #pragma omp parallel for
+    for (int i = 0; i < candidates.size(); ++i) {
+        candidates[i] = runGreedyPlusPlus(candidates[i], deliveries, depots);
     }
 
-    return buildFinalRoute(bestOrder, bestDepot, deliveries, depots);
+    Candidate best = *std::min_element(candidates.begin(), candidates.end(),
+        [](const Candidate& a, const Candidate& b) {
+            return a.cost < b.cost;
+        });
+
+    return buildFinalRoute(best.order, best.depot, deliveries, depots);
 }
 
 std::vector<CourierSubPath> buildFinalRoute(const std::vector<int>& order,
@@ -378,4 +392,83 @@ std::vector<CourierSubPath> buildFinalRoute(const std::vector<int>& order,
 
     route.push_back({{curr, bestEndDepot}, precompute[curr][bestEndDepot].path});
     return route;
+}
+
+std::vector<Candidate> generateCandidates(const std::vector<DeliveryInf>& deliveries,
+                                          const std::vector<IntersectionIdx>& depots) {
+    std::vector<Candidate> candidates;
+
+    for (const IntersectionIdx& depot : depots) {
+        std::unordered_set<int> pickedUp, droppedOff;
+        std::vector<int> order;
+        IntersectionIdx curr = depot;
+        bool valid = true;
+
+        while (droppedOff.size() < deliveries.size()) {
+            int bestIdx = -1;
+            float minTime = std::numeric_limits<float>::max();
+            IntersectionIdx next = -1;
+
+            for (int i = 0; i < deliveries.size(); i++) {
+                if (pickedUp.count(i) && !droppedOff.count(i)) {
+                    IntersectionIdx drop = deliveries[i].dropOff;
+                    if (precompute[curr].count(drop)) {
+                        float t = precompute[curr][drop].travel_time;
+                        if (t < minTime) {
+                            minTime = t;
+                            bestIdx = i;
+                            next = drop;
+                        }
+                    }
+                }
+            }
+
+            for (int i = 0; i < deliveries.size(); i++) {
+                if (!pickedUp.count(i)) {
+                    IntersectionIdx pick = deliveries[i].pickUp;
+                    if (precompute[curr].count(pick)) {
+                        float t = precompute[curr][pick].travel_time;
+                        if (t < minTime) {
+                            minTime = t;
+                            bestIdx = i;
+                            next = pick;
+                        }
+                    }
+                }
+            }
+
+            if (bestIdx == -1) {
+                valid = false;
+                break;
+            }
+
+            order.push_back(bestIdx);
+            if (pickedUp.count(bestIdx)) droppedOff.insert(bestIdx);
+            else pickedUp.insert(bestIdx);
+            curr = next;
+        }
+
+        if (valid) {
+            float totalTime = evaluatePath(order, depot, deliveries, depots);
+            candidates.push_back({order, depot, totalTime});
+        }
+    }
+
+    return candidates;
+}
+
+Candidate runGreedyPlusPlus(const Candidate& base,
+                             const std::vector<DeliveryInf>& deliveries,
+                             const std::vector<IntersectionIdx>& depots) {
+    Candidate best = base;
+    bool improved = true;
+
+    while (improved) {
+        float prev = best.cost;
+        swapOrder(best.order, best.cost, best.depot, deliveries, depots);
+        opt2Perturbation(best.order, best.cost, best.depot, deliveries, depots);
+        improved = (best.cost < prev - 0.1f);
+    }
+
+    return best;
 }
