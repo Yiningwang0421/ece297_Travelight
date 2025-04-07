@@ -9,6 +9,7 @@
 #include <set>
 #include <omp.h>
 #include <queue>
+#include <random>
 
 struct PathInfo{
     float travel_time;
@@ -201,41 +202,55 @@ void swapOrder(std::vector<VisitNode>& bestOrder, float& bestTime, IntersectionI
     const int maxTrials = 40000;
     int trials = 0;
     int size = bestOrder.size();
-
-    while (trials < maxTrials) {
-        std::vector<VisitNode> tempOrder = bestOrder;
-        int i = rand() % size;
-        int j = rand() % size;
+    std::vector<VisitNode> tempOrder;
+    
+    while(trials < maxTrials){
+        tempOrder = bestOrder;
+        int i = rand()%size;
+        int j = rand()%size;
         while (j == i) j = rand() % size;
         if (i > j) std::swap(i, j);
-        if (rand() % 2)
-            std::swap(tempOrder[i], tempOrder[j]);
-        else
-            std::reverse(tempOrder.begin() + i, tempOrder.begin() + j + 1);
-        std::unordered_set<int> pickedUp;
-        bool legal = true;
-        for (const auto& v : tempOrder) {
-            if (!v.isPickup && pickedUp.find(v.deliveryIdx) == pickedUp.end()) {
-                legal = false;
-                break;
-            }
-            if (v.isPickup) pickedUp.insert(v.deliveryIdx);
-        }
-        if (!legal) {
-            trials++;
-            continue;
-        }
-        float newTime = evaluatePath(tempOrder, bestDepot, depots);
-        if (newTime < bestTime) {
-            bestOrder = tempOrder;
-            bestTime = newTime;
-            trials = 0;
-        } else {
-            trials++;
-        }
+        std::swap(tempOrder[i], tempOrder[j]);
+        for(int k=0; k<depots.size(); k++){
+            float newTime = evaluatePath(tempOrder, depots[k], depots);
+            if (newTime < bestTime) {
+                bestOrder = tempOrder;
+                bestTime = newTime;
+                trials = 0;
+            } else {
+                trials++;
+            }        
+        }        
     }
-}
+    
+    trials = 0;
+    while(trials < maxTrials){
+        tempOrder = bestOrder;
+        int i = rand()%size;
+        int j = rand()%size;
+        int m = rand()%size;
+        while (j == i) j = rand() % size;
+        if (i > j) std::swap(i, j);
+        int len = j - i;
+        while (!(m + len <= size)) m = rand()%size;
+        std::swap_ranges(tempOrder.begin() + i, tempOrder.begin() + j, tempOrder.begin() + m);
+        for(int k=0; k<depots.size(); k++){
+            float newTime = evaluatePath(tempOrder, depots[k], depots);
+            if (newTime == std::numeric_limits<float>::max()){
+                std::reverse(tempOrder.begin()+i, tempOrder.begin()+j);
+            }
+            newTime = evaluatePath(tempOrder, depots[k], depots);
+            if (newTime < bestTime) {
+                bestOrder = tempOrder;
+                bestTime = newTime;
+                trials = 0;
+            } else{
+                trials++;
+            }        
+        }        
+    }
 
+}
 
 void opt2Perturbation(std::vector<VisitNode>& bestOrder, float& bestTime, IntersectionIdx bestDepot, const std::vector<IntersectionIdx>& depots) {
     const int maxRounds = 30;
