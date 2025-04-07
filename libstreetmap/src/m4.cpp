@@ -289,20 +289,22 @@ void simulatedAnnealing(std::vector<int>& bestOrder, float& bestTime, Intersecti
     }
 }
 
-std::vector<CourierSubPath> travelingCourier(const float turn_penalty,
-                                             const std::vector<DeliveryInf>& deliveries,
-                                             const std::vector<IntersectionIdx>& depots) {
-    precompute.clear();
-    precomputePath(deliveries, depots, turn_penalty);
+void multiStartParallel(std::vector<int>& bestOrder, float& bestTime, IntersectionIdx& bestDepot,
+                        const std::vector<DeliveryInf>& deliveries, const std::vector<IntersectionIdx>& depots,
+                        float turn_penalty, int numThreads) {
 
-    std::vector<int> bestOrder;
-    float bestTime = std::numeric_limits<float>::max();
-    IntersectionIdx bestDepot = depots[0];
+    // Shared best across all threads (protected by critical section)
+    bestTime = std::numeric_limits<float>::max();
 
-    for (const IntersectionIdx& depot : depots) {
+    #pragma omp parallel for num_threads(numThreads)
+    for (int t = 0; t < numThreads; t++) {
+        std::mt19937 rng(std::random_device{}());
+        std::uniform_int_distribution<> depotDist(0, depots.size() - 1);
+
         std::unordered_set<int> pickedUp, droppedOff;
         std::vector<int> order;
-        IntersectionIdx curr = depot;
+        IntersectionIdx localDepot = depots[depotDist(rng)];
+        IntersectionIdx curr = localDepot;
         bool valid = true;
 
         while (droppedOff.size() < deliveries.size()) {
@@ -310,7 +312,7 @@ std::vector<CourierSubPath> travelingCourier(const float turn_penalty,
             float minTime = std::numeric_limits<float>::max();
             IntersectionIdx next = -1;
 
-            for (int i = 0; i < deliveries.size(); i++) { //If picked up but not dropped off yet
+            for (int i = 0; i < deliveries.size(); i++) {
                 if (pickedUp.count(i) && !droppedOff.count(i)) {
                     IntersectionIdx drop = deliveries[i].dropOff;
                     if (precompute[curr].count(drop)) {
@@ -324,21 +326,19 @@ std::vector<CourierSubPath> travelingCourier(const float turn_penalty,
                 }
             }
 
-            //if (bestIdx == -1) {//Nowhere to drop off
-                for (int i = 0; i < deliveries.size(); i++) {
-                    if (!pickedUp.count(i)) {
-                        IntersectionIdx pick = deliveries[i].pickUp;
-                        if (precompute[curr].count(pick)) {
-                            float t = precompute[curr][pick].travel_time;
-                            if (t < minTime) {
-                                minTime = t;
-                                bestIdx = i;
-                                next = pick;
-                            }
+            for (int i = 0; i < deliveries.size(); i++) {
+                if (!pickedUp.count(i)) {
+                    IntersectionIdx pick = deliveries[i].pickUp;
+                    if (precompute[curr].count(pick)) {
+                        float t = precompute[curr][pick].travel_time;
+                        if (t < minTime) {
+                            minTime = t;
+                            bestIdx = i;
+                            next = pick;
                         }
                     }
                 }
-            //}
+            }
 
             if (bestIdx == -1) {
                 valid = false;
@@ -353,14 +353,14 @@ std::vector<CourierSubPath> travelingCourier(const float turn_penalty,
 
         if (!valid) continue;
 
-        float totalTime = 0;
+        float time = 0.0f;
         pickedUp.clear();
         droppedOff.clear();
-        curr = depot;
+        curr = localDepot;
 
         for (int idx : order) {
             IntersectionIdx next = pickedUp.count(idx) ? deliveries[idx].dropOff : deliveries[idx].pickUp;
-            totalTime += precompute[curr][next].travel_time;
+            time += precompute[curr][next].travel_time;
             curr = next;
             if (pickedUp.count(idx)) droppedOff.insert(idx);
             else pickedUp.insert(idx);
@@ -373,16 +373,38 @@ std::vector<CourierSubPath> travelingCourier(const float turn_penalty,
                 if (t < returnT) returnT = t;
             }
         }
+        time += returnT;
 
-        totalTime += returnT;
-        if (totalTime < bestTime) {
-            bestTime = totalTime;
-            bestOrder = order;
-            bestDepot = depot;
+        // Run local optimizations
+        swapOrder(order, time, localDepot, deliveries, depots);
+        opt2Perturbation(order, time, localDepot, deliveries, depots);
+        simulatedAnnealing(order, time, localDepot, deliveries, depots);
+
+        #pragma omp critical
+        {
+            if (time < bestTime) {
+                bestTime = time;
+                bestOrder = order;
+                bestDepot = localDepot;
+            }
         }
     }
+}
 
-    // Optimize with local search
+std::vector<CourierSubPath> travelingCourier(const float turn_penalty,
+                                             const std::vector<DeliveryInf>& deliveries,
+                                             const std::vector<IntersectionIdx>& depots) {
+    precompute.clear();
+    precomputePath(deliveries, depots, turn_penalty);
+
+    std::vector<int> bestOrder;
+    float bestTime = std::numeric_limits<float>::max();
+    IntersectionIdx bestDepot = depots[0];
+
+    // Run multi-threaded optimization
+    multiStartParallel(bestOrder, bestTime, bestDepot, deliveries, depots, turn_penalty, 8); // 8 threads
+
+    // Optional final polish
     bool improved = true;
     while(improved){
         float prevTime = bestTime;
@@ -404,6 +426,7 @@ std::vector<CourierSubPath> travelingCourier(const float turn_penalty,
         curr = next;
     }
 
+    // Return to end depot
     float returnT = std::numeric_limits<float>::max();
     IntersectionIdx bestEndDepot = depots[0];
     for (const IntersectionIdx& depot : depots) {
@@ -416,5 +439,6 @@ std::vector<CourierSubPath> travelingCourier(const float turn_penalty,
         }
     }
     route.push_back({{curr, bestEndDepot}, precompute[curr][bestEndDepot].path});
+
     return route;
 }
