@@ -14,7 +14,7 @@ struct PathInfo{
     float travel_time;
     std::vector<StreetSegmentIdx> path;
 };
-
+typedef std::pair<int, bool> DeliveryAction;
 std::unordered_map<IntersectionIdx, std::unordered_map<IntersectionIdx, PathInfo>> precompute;
 std::unordered_map<IntersectionIdx, PathInfo> dijkstra(IntersectionIdx start, const std::unordered_set<IntersectionIdx>& target, float turnPenalty);
 void precomputePath(const std::vector<DeliveryInf>& deliveries, const std::vector<IntersectionIdx>& depots, float turnPenalty);
@@ -103,108 +103,159 @@ void precomputePath(const std::vector<DeliveryInf> & deliveries, const std::vect
 
 void swapOrder(std::vector<int>& bestOrder, float& bestTime, IntersectionIdx bestDepot,
                const std::vector<DeliveryInf>& deliveries, const std::vector<IntersectionIdx>& depots) {
-    const int maxTrials = 40000;
-    int trials = 0;
     int size = bestOrder.size();
-    while (trials < maxTrials) {
-        std::vector<int> tempOrder = bestOrder;
-        int i = rand() % size;
-        int j = rand() % size;
-        while (j == i) j = rand() % size;
-        std::swap(tempOrder[i], tempOrder[j]);
-        std::unordered_set<int> pickedUp, droppedOff;
-        IntersectionIdx curr = bestDepot;
-        float newTime = 0;
-        bool legal = true;
-        for (int idx : tempOrder) {
-            IntersectionIdx next;
-            if (pickedUp.count(idx)) {
-                next = deliveries[idx].dropOff;
-                droppedOff.insert(idx);
-            } else {
-                next = deliveries[idx].pickUp;
-                pickedUp.insert(idx);
+    int maxIterations = 100;
+    int maxNoImprovement = 15;
+    int noImprovementCount = 0;
+
+    for (int iter = 0; iter < maxIterations && noImprovementCount < maxNoImprovement; iter++) {
+        int best_i = -1;
+        int best_j = -1;
+        float bestNewTime = bestTime;
+
+        for (int i = 0; i < size - 1; i++) {
+            for (int j = i + 1; j < size && j - i <= 15; j++) {
+                std::vector<int> candidate = bestOrder;
+                std::swap(candidate[i], candidate[j]);
+
+                std::unordered_set<int> picked, dropped;
+                IntersectionIdx curr = bestDepot;
+                float travel = 0;
+                bool legal = true;
+
+                for (int idx : candidate) {
+                    IntersectionIdx next;
+                    if (picked.count(idx) && !dropped.count(idx)) {
+                        next = deliveries[idx].dropOff;
+                        dropped.insert(idx);
+                    } else if (!picked.count(idx)) {
+                        next = deliveries[idx].pickUp;
+                        picked.insert(idx);
+                    } else {
+                        legal = false;
+                        break;
+                    }
+
+                    if (!precompute[curr].count(next)) {
+                        legal = false;
+                        break;
+                    }
+
+                    travel += precompute[curr][next].travel_time;
+                    if (travel > bestTime) {
+                        legal = false;
+                        break;
+                    }
+
+                    curr = next;
+                }
+
+                if (!legal) continue;
+
+                float returnT = std::numeric_limits<float>::max();
+                for (IntersectionIdx depot : depots) {
+                    if (precompute[curr].count(depot)) {
+                        float t = precompute[curr][depot].travel_time;
+                        if (t < returnT) returnT = t;
+                    }
+                }
+
+                travel += returnT;
+
+                if (travel < bestNewTime) {
+                    bestNewTime = travel;
+                    best_i = i;
+                    best_j = j;
+                }
             }
-            if (!precompute[curr].count(next)) {
-                legal = false;
-                break;
-            }
-            newTime += precompute[curr][next].travel_time;
-            if (newTime > bestTime) {
-                legal = false;
-                break;
-            }
-            curr = next;
         }
-        if (!legal) {
-            trials++;
-            continue;
-        }
-        float returnTime = std::numeric_limits<float>::max();
-        for (const IntersectionIdx& depot : depots) {
-            if (precompute[curr].count(depot)) {
-                float t = precompute[curr][depot].travel_time;
-                if (t < returnTime) returnTime = t;
-            }
-        }
-        newTime += returnTime;
-        if (newTime < bestTime) {
-            bestOrder = tempOrder;
-            bestTime = newTime;
-            trials = 0;
+
+        if (best_i != -1) {
+            std::swap(bestOrder[best_i], bestOrder[best_j]);
+            bestTime = bestNewTime;
+            noImprovementCount = 0;
         } else {
-            trials++;
+            noImprovementCount++;
         }
     }
 }
 
 void opt2Perturbation(std::vector<int>& bestOrder, float& bestTime, IntersectionIdx bestDepot,
                       const std::vector<DeliveryInf>& deliveries, const std::vector<IntersectionIdx>& depots) {
-    const int maxRounds = 30;
-    for (int round = 0; round < maxRounds; ++round) {
-        bool improved = false;
-        for (int i = 0; i + 2 < bestOrder.size(); i++) {
-            for (int j = i + 2; j < bestOrder.size() && j - i <= 20; j++) {
-                std::vector<int> newOrder = bestOrder;
-                std::reverse(newOrder.begin() + i, newOrder.begin() + j + 1);
-                std::unordered_set<int> pickedUp, droppedOff;
+    int size = bestOrder.size();
+    int maxWindow = 20;
+    int maxIterations = 150;
+    int maxNoImprovement = 10;
+    int noImprovementCount = 0;
+
+    for (int iter = 0; iter < maxIterations && noImprovementCount < maxNoImprovement; iter++) {
+        int best_i = -1, best_j = -1;
+        float bestNewTime = bestTime;
+
+        for (int i = 0; i < size - 2; i++) {
+            for (int j = i + 2; j < size && j - i <= maxWindow; j++) {
+                std::vector<int> candidate = bestOrder;
+                std::reverse(candidate.begin() + i, candidate.begin() + j + 1);
+
+                std::unordered_set<int> picked, dropped;
                 IntersectionIdx curr = bestDepot;
-                float newTime = 0;
+                float travel = 0;
                 bool legal = true;
-                for (int idx : newOrder) {
-                    IntersectionIdx next = pickedUp.count(idx) ? deliveries[idx].dropOff : deliveries[idx].pickUp;
+
+                for (int idx : candidate) {
+                    IntersectionIdx next;
+                    if (picked.count(idx) && !dropped.count(idx)) {
+                        next = deliveries[idx].dropOff;
+                        dropped.insert(idx);
+                    } else if (!picked.count(idx)) {
+                        next = deliveries[idx].pickUp;
+                        picked.insert(idx);
+                    } else {
+                        legal = false;
+                        break;
+                    }
+
                     if (!precompute[curr].count(next)) {
                         legal = false;
                         break;
                     }
-                    newTime += precompute[curr][next].travel_time;
-                    if (newTime > bestTime) {
+
+                    travel += precompute[curr][next].travel_time;
+                    if (travel > bestTime) {
                         legal = false;
                         break;
                     }
+
                     curr = next;
-                    if (pickedUp.count(idx)) droppedOff.insert(idx);
-                    else pickedUp.insert(idx);
                 }
+
                 if (!legal) continue;
-                float returnTime = std::numeric_limits<float>::max();
-                for (const IntersectionIdx& depot : depots) {
+
+                float returnT = std::numeric_limits<float>::max();
+                for (IntersectionIdx depot : depots) {
                     if (precompute[curr].count(depot)) {
                         float t = precompute[curr][depot].travel_time;
-                        if (t < returnTime) returnTime = t;
+                        if (t < returnT) returnT = t;
                     }
                 }
-                newTime += returnTime;
-                if (newTime < bestTime) {
-                    bestOrder = newOrder;
-                    bestTime = newTime;
-                    improved = true;
-                    break;
+
+                travel += returnT;
+
+                if (travel < bestNewTime) {
+                    bestNewTime = travel;
+                    best_i = i;
+                    best_j = j;
                 }
             }
-            if (improved) break;
         }
-        if (!improved) break;
+
+        if (best_i != -1) {
+            std::reverse(bestOrder.begin() + best_i, bestOrder.begin() + best_j + 1);
+            bestTime = bestNewTime;
+            noImprovementCount = 0;
+        } else {
+            noImprovementCount++;
+        }
     }
 }
 
@@ -212,15 +263,17 @@ std::vector<CourierSubPath> travelingCourier(const float turn_penalty, const std
     precompute.clear();
     precomputePath(deliveries, depots, turn_penalty);
 
-    std::vector<int> bestOrder;
+    std::vector<DeliveryAction> bestOrder;
     float bestTime = std::numeric_limits<float>::max();
     IntersectionIdx bestDepot = depots[0];
 
     for (const IntersectionIdx& depot : depots) {
-        std::unordered_set<int> pickedUp, droppedOff;
-        std::vector<int> order;
+        std::unordered_set<int> pickedUp;
+        std::unordered_set droppedOff;
+        std::vector<DeliveryAction> order;
         IntersectionIdx curr = depot;
         bool valid = true;
+
 
         while (droppedOff.size() < deliveries.size()) {
             int bestIdx = -1;
@@ -263,8 +316,12 @@ std::vector<CourierSubPath> travelingCourier(const float turn_penalty, const std
             }
 
             order.push_back(bestIdx);
-            if (pickedUp.count(bestIdx)) droppedOff.insert(bestIdx);
-            else pickedUp.insert(bestIdx);
+            if (pickedUp.count(bestIdx)){
+                droppedOff.insert(bestIdx);
+            }
+            else {
+                pickedUp.insert(bestIdx);
+            }
             curr = next;
         }
 
