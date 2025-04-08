@@ -101,6 +101,7 @@ void precomputePath(const std::vector<DeliveryInf> & deliveries, const std::vect
     }
     std::vector<IntersectionIdx> nodeList(nodes.begin(), nodes.end());
     std::vector<std::unordered_map<IntersectionIdx, PathInfo>> local_maps(nodeList.size());
+
     #pragma omp parallel for
     for (int i = 0; i < nodeList.size(); ++i) {
         local_maps[i] = dijkstra(nodeList[i], nodes, turnPenalty);
@@ -173,7 +174,7 @@ std::vector<VisitNode> GreedyHeuristic(const std::vector<DeliveryInf>& deliverie
                     }
                 }
             }
-            if (!found){ break;}
+            if (found == false){ break;}
             totalTime += minT;
             route.push_back(bestMove);
             curr = bestMove.id;
@@ -278,61 +279,64 @@ void swapOrder(std::vector<VisitNode>& bestOrder, float& bestTime, IntersectionI
 
 void opt2Perturbation(std::vector<VisitNode>& bestOrder, float& bestTime, IntersectionIdx bestDepot, const std::vector<IntersectionIdx>& depots) {
     const int maxRounds = 30;
-    const int maxWindowSize = 20;
     for (int round = 0; round < maxRounds; ++round) {
         bool improved = false;
         for (int i = 0; i + 2 < bestOrder.size(); ++i) {
-            for (int j = i + 2; j < bestOrder.size() && j - i <= maxWindowSize; ++j) {
+            for (int j = i + 2; j < bestOrder.size() && j - i <= 20; ++j) {
                 std::vector<VisitNode> trialOrder = bestOrder;
                 std::reverse(trialOrder.begin() + i, trialOrder.begin() + j + 1);
                 std::unordered_set<int> pickedUp;
                 bool legal = true;
-                for (const auto& v : trialOrder) {
-                    if (!v.isPickup && pickedUp.find(v.deliveryIdx) == pickedUp.end()) {
+                for(int currOrder = 0; currOrder < trialOrder.size(); currOrder ++){
+                    if(trialOrder[currOrder].isPickup == false && pickedUp.find(trialOrder[currOrder].deliveryIdx) == pickedUp.end()){
                         legal = false;
                         break;
                     }
-                    if (v.isPickup) {
-                        pickedUp.insert(v.deliveryIdx);
+                    if(trialOrder[currOrder].isPickup == true){
+                        pickedUp.insert(trialOrder[currOrder].deliveryIdx);
                     }
                 }
-                if (!legal) continue;
-                float trialTime = evaluatePath(trialOrder, bestDepot, depots);
-                if (trialTime < bestTime) {
+                if (legal == false){
+                    continue;
+                }
+                float newTime = evaluatePath(trialOrder, bestDepot, depots);
+                if (newTime < bestTime) {
                     bestOrder = trialOrder;
-                    bestTime = trialTime;
+                    bestTime = newTime;
                     improved = true;
                     break;
                 }
             }
-            if (improved) break;
+            if (improved == true) {
+                break;
+            }
         }
-        if (!improved) break;
+        if(improved == false){
+            break;
+        }
     }
 }
 
 std::vector<CourierSubPath> buildCourierRoute(const std::vector<VisitNode>& visitList, IntersectionIdx startDepot, const std::vector<IntersectionIdx>& depots) {
     std::vector<CourierSubPath> route;
     IntersectionIdx curr = startDepot;
-    for (const auto& v : visitList) {
-        if (!precompute.count(curr) || !precompute[curr].count(v.id)){
+    for(int i = 0; i < visitList.size(); i++){
+        if(precompute.find(curr) == precompute.end() || precompute[curr].find(visitList[i].id) == precompute[curr].end()){
             return {};
         }
-        const auto& path = precompute[curr][v.id].path;
-        route.push_back({{curr, v.id}, path});
-        curr = v.id;
+        route.push_back(CourierSubPath({{curr, visitList[i].id}, precompute[curr][visitList[i].id].path}));
+        curr = visitList[i].id;
     }
-    float bestReturn = 99999.0;
+    float bestTime = 99999.0;
     IntersectionIdx bestEndDepot = depots[0];
-    for (const auto& d : depots) {
-        float t = precompute[curr][d].travel_time;
-        if (t < bestReturn) {
-            bestReturn = t;
-            bestEndDepot = d;
+    for(int i = 0; i <  depots.size(); i++){
+        float t = precompute[curr][depots[i]].travel_time;
+        if(t < bestTime){
+            bestTime = t;
+            bestEndDepot = depots[i];
         }
     }
-    const auto& path = precompute[curr][bestEndDepot].path;
-    route.push_back({{curr, bestEndDepot}, path});
+    route.push_back({{curr, bestEndDepot}, precompute[curr][bestEndDepot].path});
     return route;
 }
 
@@ -467,7 +471,6 @@ std::vector<VisitNode> threeOptVisit(const std::vector<VisitNode>& order,
 std::vector<CourierSubPath> travelingCourier(const float turn_penalty,const std::vector<DeliveryInf>& deliveries,const std::vector<IntersectionIdx>& depots) {
     precompute.clear();
     precomputePath(deliveries, depots, turn_penalty);
-
     IntersectionIdx bestDepot;
     std::vector<VisitNode> bestOrder = GreedyHeuristic(deliveries, depots, bestDepot);
     float bestTime = evaluatePath(bestOrder, bestDepot, depots);
