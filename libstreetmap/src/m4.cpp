@@ -485,7 +485,7 @@ std::vector<CourierSubPath> travelingCourier(const float turn_penalty,const std:
 //    for(int i=0; i<orders.size(); i++){
 //        orders[i] = {bestOrder, bestTime};
 //    }
-    /*//optimization
+    //optimization
     int iteration = 0;
     while(!timeOut && iteration<1){
         swapOrder(bestOrder, bestTime, bestDepot, deliveries, depots);
@@ -496,9 +496,8 @@ std::vector<CourierSubPath> travelingCourier(const float turn_penalty,const std:
             timeOut = true;
         }
         iteration++;
-    }*/
-    swapOrder(bestOrder, bestTime, bestDepot, deliveries, depots);
-    opt2Perturbation(bestOrder, bestTime, bestDepot, depots);
+    }
+
     bestOrder = threeOptVisit(bestOrder, bestDepot, deliveries, depots); 
 
     return buildCourierRoute(bestOrder, bestDepot, depots);
