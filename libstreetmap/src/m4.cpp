@@ -338,6 +338,8 @@ bool isLegalVisitOrder(const std::vector<VisitNode>& order) {
     return true;
 }
 
+#include <chrono> // 加入这个头文件
+
 std::vector<VisitNode> threeOptVisit(const std::vector<VisitNode>& order,
                                      IntersectionIdx depot,
                                      const std::vector<DeliveryInf>& deliveries,
@@ -351,29 +353,37 @@ std::vector<VisitNode> threeOptVisit(const std::vector<VisitNode>& order,
     if (n < 175) N = 1;
     else if (n < 350) N = 2;
     else if (n < 500) N = 4;
-    else N = 7;
-    
-    
-    if(n < 4) return bestOrder;  
+    else N = 8;
+
+    if(n < 4) return bestOrder;
+
+    // ✅ 记录开始时间
+    auto start_time = std::chrono::high_resolution_clock::now();
+    const int TIME_LIMIT_MS = 35;
 
     while (improvement) {
         improvement = false;
-        for (int i = 1; i < n - 2; i+= N) {
-            for (int j = i + 1; j < n - 1; j+=N) {
-                for (int k = j + 1; k < n; k+=N) {
-                    // 将路径分为四段：
-                    // S1 = bestOrder[0, i)
-                    // S2 = bestOrder[i, j)
-                    // S3 = bestOrder[j, k)
-                    // S4 = bestOrder[k, n)
+        for (int i = 1; i < n - 2; i += N) {
+            for (int j = i + 1; j < n - 1; j += N) {
+                for (int k = j + 1; k < n; k += N) {
+
+                    // ✅ 检查是否超时
+                    auto now = std::chrono::high_resolution_clock::now();
+                    auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(now - start_time).count();
+                    if (duration > TIME_LIMIT_MS) {
+                        std::cout << "threeOptVisit timeout at " << duration << " ms\n";
+                        return bestOrder;
+                    }
+
+                    // 路径分段
                     std::vector<VisitNode> S1(bestOrder.begin(), bestOrder.begin() + i);
                     std::vector<VisitNode> S2(bestOrder.begin() + i, bestOrder.begin() + j);
                     std::vector<VisitNode> S3(bestOrder.begin() + j, bestOrder.begin() + k);
                     std::vector<VisitNode> S4(bestOrder.begin() + k, bestOrder.end());
-                    
+
                     std::vector<std::vector<VisitNode>> candidates;
-                    
-                    // Option 1: Reverse S2：S1 + reverse(S2) + S3 + S4
+
+                    // Option 1
                     {
                         std::vector<VisitNode> candidate = S1;
                         std::vector<VisitNode> revS2 = S2;
@@ -383,7 +393,7 @@ std::vector<VisitNode> threeOptVisit(const std::vector<VisitNode>& order,
                         candidate.insert(candidate.end(), S4.begin(), S4.end());
                         candidates.push_back(candidate);
                     }
-                    // Option 2: Reverse S3：S1 + S2 + reverse(S3) + S4
+                    // Option 2
                     {
                         std::vector<VisitNode> candidate = S1;
                         candidate.insert(candidate.end(), S2.begin(), S2.end());
@@ -393,7 +403,7 @@ std::vector<VisitNode> threeOptVisit(const std::vector<VisitNode>& order,
                         candidate.insert(candidate.end(), S4.begin(), S4.end());
                         candidates.push_back(candidate);
                     }
-                    // Option 3: Reverse S2 和 S3：S1 + reverse(S2) + reverse(S3) + S4
+                    // Option 3
                     {
                         std::vector<VisitNode> candidate = S1;
                         std::vector<VisitNode> revS2 = S2, revS3 = S3;
@@ -404,7 +414,7 @@ std::vector<VisitNode> threeOptVisit(const std::vector<VisitNode>& order,
                         candidate.insert(candidate.end(), S4.begin(), S4.end());
                         candidates.push_back(candidate);
                     }
-                    // Option 4: Swap S2 和 S3：S1 + S3 + S2 + S4
+                    // Option 4
                     {
                         std::vector<VisitNode> candidate = S1;
                         candidate.insert(candidate.end(), S3.begin(), S3.end());
@@ -412,7 +422,7 @@ std::vector<VisitNode> threeOptVisit(const std::vector<VisitNode>& order,
                         candidate.insert(candidate.end(), S4.begin(), S4.end());
                         candidates.push_back(candidate);
                     }
-                    // Option 5: S1 + S3 + reverse(S2) + S4
+                    // Option 5
                     {
                         std::vector<VisitNode> candidate = S1;
                         candidate.insert(candidate.end(), S3.begin(), S3.end());
@@ -422,7 +432,7 @@ std::vector<VisitNode> threeOptVisit(const std::vector<VisitNode>& order,
                         candidate.insert(candidate.end(), S4.begin(), S4.end());
                         candidates.push_back(candidate);
                     }
-                    // Option 6: S1 + reverse(S3) + S2 + S4
+                    // Option 6
                     {
                         std::vector<VisitNode> candidate = S1;
                         std::vector<VisitNode> revS3 = S3;
@@ -432,9 +442,8 @@ std::vector<VisitNode> threeOptVisit(const std::vector<VisitNode>& order,
                         candidate.insert(candidate.end(), S4.begin(), S4.end());
                         candidates.push_back(candidate);
                     }
-                    
                     for (const auto& cand : candidates) {
-                        if (!isLegalVisitOrder(cand)) continue; 
+                        if (!isLegalVisitOrder(cand)) continue;
                         float candCost = evaluatePath(cand, depot, depots);
                         if (candCost < bestCost) {
                             bestCost = candCost;
@@ -446,6 +455,7 @@ std::vector<VisitNode> threeOptVisit(const std::vector<VisitNode>& order,
             }
         }
     }
+
     return bestOrder;
 }
 
@@ -468,10 +478,7 @@ std::vector<CourierSubPath> travelingCourier(const float turn_penalty,const std:
         swapOrder(bestOrder, bestTime, bestDepot, deliveries, depots);
         opt2Perturbation(bestOrder, bestTime, bestDepot, depots);   
     }
-    bestOrder = threeOptVisit(bestOrder, bestDepot, deliveries, depots);
-
-    swapOrder(bestOrder, bestTime, bestDepot, deliveries, depots);
-    opt2Perturbation(bestOrder, bestTime, bestDepot, depots); 
+    bestOrder = threeOptVisit(bestOrder, bestDepot, deliveries, depots); 
 
     return buildCourierRoute(bestOrder, bestDepot, depots);
 }
