@@ -466,6 +466,7 @@ std::vector<CourierSubPath> travelingCourier(const float turn_penalty,const std:
     //optimization
     swapOrder(bestOrder, bestTime, bestDepot, deliveries, depots);
     opt2Perturbation(bestOrder, bestTime, bestDepot, depots);
+    bestOrder = threeOptVisit(bestOrder, bestDepot, deliveries, depots);
     return buildCourierRoute(bestOrder, bestDepot, depots);
 }
 
