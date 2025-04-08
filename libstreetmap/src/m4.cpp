@@ -357,7 +357,7 @@ std::vector<VisitNode> threeOptVisit(const std::vector<VisitNode>& order,
     if (n < 4) return bestOrder;
 
     auto start_time = std::chrono::high_resolution_clock::now();
-    const int TIME_LIMIT_MS = 35000;
+    const int TIME_LIMIT_MS = 34500;
 
     while (improvement) {
         improvement = false;
