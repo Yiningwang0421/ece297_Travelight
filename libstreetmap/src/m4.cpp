@@ -351,8 +351,8 @@ std::vector<VisitNode> threeOptVisit(const std::vector<VisitNode>& order,
     int N;
     if (n < 175) N = 1;
     else if (n < 350) N = 2;
-    else if (n < 500) N = 4;
-    else N = 8;
+    else if (n < 500) N = 3;
+    else N = 6;
 
     if (n < 4) return bestOrder;
 
@@ -486,7 +486,7 @@ std::vector<CourierSubPath> travelingCourier(const float turn_penalty,const std:
 //        orders[i] = {bestOrder, bestTime};
 //    }
     //optimization
-    int iteration = 0;
+    /*int iteration = 0;
     while(!timeOut && iteration<1){
         swapOrder(bestOrder, bestTime, bestDepot, deliveries, depots);
         opt2Perturbation(bestOrder, bestTime, bestDepot, depots);
@@ -496,8 +496,11 @@ std::vector<CourierSubPath> travelingCourier(const float turn_penalty,const std:
             timeOut = true;
         }
         iteration++;
-    }
-
+    }*/
+    
+    swapOrder(bestOrder, bestTime, bestDepot, deliveries, depots);
+    opt2Perturbation(bestOrder, bestTime, bestDepot, depots);
+    
     bestOrder = threeOptVisit(bestOrder, bestDepot, deliveries, depots); 
 
     return buildCourierRoute(bestOrder, bestDepot, depots);
