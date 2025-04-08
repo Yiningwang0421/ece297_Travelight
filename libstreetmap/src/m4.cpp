@@ -9,7 +9,7 @@
 #include <set>
 #include <omp.h>
 #include <queue>
-#include <chrono>
+#include <chrono> 
 #define TIME_LIMIT 10
 
 struct PathInfo{
@@ -338,7 +338,6 @@ bool isLegalVisitOrder(const std::vector<VisitNode>& order) {
     return true;
 }
 
-#include <chrono> // 加入这个头文件
 
 std::vector<VisitNode> threeOptVisit(const std::vector<VisitNode>& order,
                                      IntersectionIdx depot,
@@ -348,14 +347,14 @@ std::vector<VisitNode> threeOptVisit(const std::vector<VisitNode>& order,
     float bestCost = evaluatePath(order, depot, depots);
     bool improvement = true;
     int n = bestOrder.size();
-    std::cout << n << std::endl;
+
     int N;
     if (n < 175) N = 1;
     else if (n < 350) N = 2;
     else if (n < 500) N = 4;
     else N = 8;
 
-    if(n < 4) return bestOrder;
+    if (n < 4) return bestOrder;
 
     auto start_time = std::chrono::high_resolution_clock::now();
     const int TIME_LIMIT_MS = 35;
@@ -373,81 +372,96 @@ std::vector<VisitNode> threeOptVisit(const std::vector<VisitNode>& order,
                         return bestOrder;
                     }
 
+                    
                     std::vector<VisitNode> S1(bestOrder.begin(), bestOrder.begin() + i);
                     std::vector<VisitNode> S2(bestOrder.begin() + i, bestOrder.begin() + j);
                     std::vector<VisitNode> S3(bestOrder.begin() + j, bestOrder.begin() + k);
                     std::vector<VisitNode> S4(bestOrder.begin() + k, bestOrder.end());
 
-                    std::vector<std::vector<VisitNode>> candidates;
+                    #pragma omp parallel for
+                    for (int opt = 0; opt < 7; opt++) {
+                        std::vector<VisitNode> candidate;
 
-                    // Option 1
-                    {
-                        std::vector<VisitNode> candidate = S1;
-                        std::vector<VisitNode> revS2 = S2;
-                        std::reverse(revS2.begin(), revS2.end());
-                        candidate.insert(candidate.end(), revS2.begin(), revS2.end());
-                        candidate.insert(candidate.end(), S3.begin(), S3.end());
-                        candidate.insert(candidate.end(), S4.begin(), S4.end());
-                        candidates.push_back(candidate);
-                    }
-                    // Option 2
-                    {
-                        std::vector<VisitNode> candidate = S1;
-                        candidate.insert(candidate.end(), S2.begin(), S2.end());
-                        std::vector<VisitNode> revS3 = S3;
-                        std::reverse(revS3.begin(), revS3.end());
-                        candidate.insert(candidate.end(), revS3.begin(), revS3.end());
-                        candidate.insert(candidate.end(), S4.begin(), S4.end());
-                        candidates.push_back(candidate);
-                    }
-                    // Option 3
-                    {
-                        std::vector<VisitNode> candidate = S1;
-                        std::vector<VisitNode> revS2 = S2, revS3 = S3;
-                        std::reverse(revS2.begin(), revS2.end());
-                        std::reverse(revS3.begin(), revS3.end());
-                        candidate.insert(candidate.end(), revS2.begin(), revS2.end());
-                        candidate.insert(candidate.end(), revS3.begin(), revS3.end());
-                        candidate.insert(candidate.end(), S4.begin(), S4.end());
-                        candidates.push_back(candidate);
-                    }
-                    // Option 4
-                    {
-                        std::vector<VisitNode> candidate = S1;
-                        candidate.insert(candidate.end(), S3.begin(), S3.end());
-                        candidate.insert(candidate.end(), S2.begin(), S2.end());
-                        candidate.insert(candidate.end(), S4.begin(), S4.end());
-                        candidates.push_back(candidate);
-                    }
-                    // Option 5
-                    {
-                        std::vector<VisitNode> candidate = S1;
-                        candidate.insert(candidate.end(), S3.begin(), S3.end());
-                        std::vector<VisitNode> revS2 = S2;
-                        std::reverse(revS2.begin(), revS2.end());
-                        candidate.insert(candidate.end(), revS2.begin(), revS2.end());
-                        candidate.insert(candidate.end(), S4.begin(), S4.end());
-                        candidates.push_back(candidate);
-                    }
-                    // Option 6
-                    {
-                        std::vector<VisitNode> candidate = S1;
-                        std::vector<VisitNode> revS3 = S3;
-                        std::reverse(revS3.begin(), revS3.end());
-                        candidate.insert(candidate.end(), revS3.begin(), revS3.end());
-                        candidate.insert(candidate.end(), S2.begin(), S2.end());
-                        candidate.insert(candidate.end(), S4.begin(), S4.end());
-                        candidates.push_back(candidate);
-                    }
-                    for (const auto& cand : candidates) {
-                        if (!isLegalVisitOrder(cand)) continue;
-                        float candCost = evaluatePath(cand, depot, depots);
-                        if (candCost < bestCost) {
-                            bestCost = candCost;
-                            bestOrder = cand;
-                            improvement = true;
+                        switch (opt) {
+                            case 0: { // reverse S2
+                                candidate = S1;
+                                std::vector<VisitNode> revS2 = S2;
+                                std::reverse(revS2.begin(), revS2.end());
+                                candidate.insert(candidate.end(), revS2.begin(), revS2.end());
+                                candidate.insert(candidate.end(), S3.begin(), S3.end());
+                                candidate.insert(candidate.end(), S4.begin(), S4.end());
+                                break;
+                            }
+                            case 1: { // reverse S3
+                                candidate = S1;
+                                candidate.insert(candidate.end(), S2.begin(), S2.end());
+                                std::vector<VisitNode> revS3 = S3;
+                                std::reverse(revS3.begin(), revS3.end());
+                                candidate.insert(candidate.end(), revS3.begin(), revS3.end());
+                                candidate.insert(candidate.end(), S4.begin(), S4.end());
+                                break;
+                            }
+                            case 2: { // reverse S2 + S3
+                                candidate = S1;
+                                std::vector<VisitNode> revS2 = S2;
+                                std::vector<VisitNode> revS3 = S3;
+                                std::reverse(revS2.begin(), revS2.end());
+                                std::reverse(revS3.begin(), revS3.end());
+                                candidate.insert(candidate.end(), revS2.begin(), revS2.end());
+                                candidate.insert(candidate.end(), revS3.begin(), revS3.end());
+                                candidate.insert(candidate.end(), S4.begin(), S4.end());
+                                break;
+                            }
+                            case 3: { // swap S2 & S3
+                                candidate = S1;
+                                candidate.insert(candidate.end(), S3.begin(), S3.end());
+                                candidate.insert(candidate.end(), S2.begin(), S2.end());
+                                candidate.insert(candidate.end(), S4.begin(), S4.end());
+                                break;
+                            }
+                            case 4: { // S3 + reverse(S2)
+                                candidate = S1;
+                                candidate.insert(candidate.end(), S3.begin(), S3.end());
+                                std::vector<VisitNode> revS2 = S2;
+                                std::reverse(revS2.begin(), revS2.end());
+                                candidate.insert(candidate.end(), revS2.begin(), revS2.end());
+                                candidate.insert(candidate.end(), S4.begin(), S4.end());
+                                break;
+                            }
+                            case 5: { // reverse(S3) + S2
+                                candidate = S1;
+                                std::vector<VisitNode> revS3 = S3;
+                                std::reverse(revS3.begin(), revS3.end());
+                                candidate.insert(candidate.end(), revS3.begin(), revS3.end());
+                                candidate.insert(candidate.end(), S2.begin(), S2.end());
+                                candidate.insert(candidate.end(), S4.begin(), S4.end());
+                                break;
+                            }
+                            case 6: { // reverse(S2 + S3)
+                                candidate = S1;
+                                std::vector<VisitNode> revS2S3 = S2;
+                                revS2S3.insert(revS2S3.end(), S3.begin(), S3.end());
+                                std::reverse(revS2S3.begin(), revS2S3.end());
+                                candidate.insert(candidate.end(), revS2S3.begin(), revS2S3.end());
+                                candidate.insert(candidate.end(), S4.begin(), S4.end());
+                                break;
+                            }
                         }
-                    }
+
+                        if (!isLegalVisitOrder(candidate)) continue;
+
+                        float candCost = evaluatePath(candidate, depot, depots);
+
+                        
+                        #pragma omp critical
+                        {
+                            if (candCost < bestCost) {
+                                bestCost = candCost;
+                                bestOrder = candidate;
+                                improvement = true;
+                            }
+                        }
+                    } // end of parallel for
                 }
             }
         }
@@ -455,6 +469,7 @@ std::vector<VisitNode> threeOptVisit(const std::vector<VisitNode>& order,
 
     return bestOrder;
 }
+
 
 std::vector<CourierSubPath> travelingCourier(const float turn_penalty,const std::vector<DeliveryInf>& deliveries,const std::vector<IntersectionIdx>& depots) {
     auto startTime = std::chrono::high_resolution_clock::now();
@@ -470,9 +485,9 @@ std::vector<CourierSubPath> travelingCourier(const float turn_penalty,const std:
 //    for(int i=0; i<orders.size(); i++){
 //        orders[i] = {bestOrder, bestTime};
 //    }
-    //optimization
+    /*//optimization
     int iteration = 0;
-    while(!timeOut && iteration<100){
+    while(!timeOut && iteration<1){
         swapOrder(bestOrder, bestTime, bestDepot, deliveries, depots);
         opt2Perturbation(bestOrder, bestTime, bestDepot, depots);
         auto currentTime = std::chrono::high_resolution_clock::now();
@@ -481,8 +496,9 @@ std::vector<CourierSubPath> travelingCourier(const float turn_penalty,const std:
             timeOut = true;
         }
         iteration++;
-    }
-    return buildCourierRoute(bestOrder, bestDepot, depots);
+    }*/
+    swapOrder(bestOrder, bestTime, bestDepot, deliveries, depots);
+        opt2Perturbation(bestOrder, bestTime, bestDepot, depots);
     bestOrder = threeOptVisit(bestOrder, bestDepot, deliveries, depots); 
 
     return buildCourierRoute(bestOrder, bestDepot, depots);
