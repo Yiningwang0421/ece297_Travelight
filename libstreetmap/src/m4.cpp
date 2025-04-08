@@ -9,6 +9,8 @@
 #include <set>
 #include <omp.h>
 #include <queue>
+#include <chrono>
+#define TIME_LIMIT 50
 
 struct PathInfo{
     float travel_time;
@@ -278,44 +280,25 @@ void swapOrder(std::vector<VisitNode>& bestOrder, float& bestTime, IntersectionI
 }
 
 void opt2Perturbation(std::vector<VisitNode>& bestOrder, float& bestTime, IntersectionIdx bestDepot, const std::vector<IntersectionIdx>& depots) {
-    const int maxRounds = 30;
-    for (int round = 0; round < maxRounds; ++round) {
-        bool improved = false;
+    const int maxRounds = 10;
+    const int maxWindowSize = bestOrder.size()/3;
+    //for (int round = 0; round < maxRounds; ++round) {
         for (int i = 0; i + 2 < bestOrder.size(); ++i) {
-            for (int j = i + 2; j < bestOrder.size() && j - i <= 20; ++j) {
+            for (int j = i + 2; j < bestOrder.size() && j - i <= maxWindowSize; ++j) {
                 std::vector<VisitNode> trialOrder = bestOrder;
                 std::reverse(trialOrder.begin() + i, trialOrder.begin() + j + 1);
-                std::unordered_set<int> pickedUp;
-                bool legal = true;
-                for(int currOrder = 0; currOrder < trialOrder.size(); currOrder ++){
-                    if(trialOrder[currOrder].isPickup == false && pickedUp.find(trialOrder[currOrder].deliveryIdx) == pickedUp.end()){
-                        legal = false;
-                        break;
-                    }
-                    if(trialOrder[currOrder].isPickup == true){
-                        pickedUp.insert(trialOrder[currOrder].deliveryIdx);
-                    }
-                }
-                if (legal == false){
-                    continue;
-                }
-                float newTime = evaluatePath(trialOrder, bestDepot, depots);
-                if (newTime < bestTime) {
+                float trialTime = evaluatePath(trialOrder, bestDepot, depots);
+                if (trialTime < bestTime) {
                     bestOrder = trialOrder;
-                    bestTime = newTime;
-                    improved = true;
-                    break;
+                    bestTime = trialTime;
                 }
             }
-            if (improved == true) {
-                break;
-            }
         }
-        if(improved == false){
-            break;
-        }
-    }
+    //}
 }
+
+
+
 
 std::vector<CourierSubPath> buildCourierRoute(const std::vector<VisitNode>& visitList, IntersectionIdx startDepot, const std::vector<IntersectionIdx>& depots) {
     std::vector<CourierSubPath> route;
@@ -467,11 +450,19 @@ std::vector<VisitNode> threeOptVisit(const std::vector<VisitNode>& order,
 }
 
 std::vector<CourierSubPath> travelingCourier(const float turn_penalty,const std::vector<DeliveryInf>& deliveries,const std::vector<IntersectionIdx>& depots) {
+    auto startTime = std::chrono::high_resolution_clock::now();
+    bool timeOut = false;
     precompute.clear();
     precomputePath(deliveries, depots, turn_penalty);
     IntersectionIdx bestDepot;
     std::vector<VisitNode> bestOrder = GreedyHeuristic(deliveries, depots, bestDepot);
     float bestTime = evaluatePath(bestOrder, bestDepot, depots);
+    
+//    std::vector<std::pair<std::vector<VisitNode>, float>> orders;
+//    orders.resize(20);
+//    for(int i=0; i<orders.size(); i++){
+//        orders[i] = {bestOrder, bestTime};
+//    }
     //optimization
     for(int i = 0; i < 0; i++){
         swapOrder(bestOrder, bestTime, bestDepot, deliveries, depots);
