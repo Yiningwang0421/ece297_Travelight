@@ -363,13 +363,21 @@ std::vector<VisitNode> threeOptVisit(const std::vector<VisitNode>& order,
     float bestCost = evaluatePath(order, depot, depots);
     bool improvement = true;
     int n = bestOrder.size();
+    std::cout << n << std::endl;
+    int N;
+    if (n < 175) N = 1;
+    else if (n < 350) N = 2;
+    else if (n < 500) N = 4;
+    else N = 7;
+    
+    
     if(n < 4) return bestOrder;  
 
     while (improvement) {
         improvement = false;
-        for (int i = 1; i < n - 2; i++) {
-            for (int j = i + 1; j < n - 1; j++) {
-                for (int k = j + 1; k < n; k++) {
+        for (int i = 1; i < n - 2; i+= N) {
+            for (int j = i + 1; j < n - 1; j+=N) {
+                for (int k = j + 1; k < n; k+=N) {
                     // 将路径分为四段：
                     // S1 = bestOrder[0, i)
                     // S2 = bestOrder[i, j)
@@ -441,16 +449,6 @@ std::vector<VisitNode> threeOptVisit(const std::vector<VisitNode>& order,
                         candidate.insert(candidate.end(), S4.begin(), S4.end());
                         candidates.push_back(candidate);
                     }
-                    // Option 7: 同 Option 5（可选）
-                    {
-                        std::vector<VisitNode> candidate = S1;
-                        candidate.insert(candidate.end(), S3.begin(), S3.end());
-                        std::vector<VisitNode> revS2 = S2;
-                        std::reverse(revS2.begin(), revS2.end());
-                        candidate.insert(candidate.end(), revS2.begin(), revS2.end());
-                        candidate.insert(candidate.end(), S4.begin(), S4.end());
-                        candidates.push_back(candidate);
-                    }
                     
                     for (const auto& cand : candidates) {
                         if (!isLegalVisitOrder(cand)) continue; 
@@ -475,11 +473,15 @@ std::vector<CourierSubPath> travelingCourier(const float turn_penalty,const std:
     std::vector<VisitNode> bestOrder = GreedyHeuristic(deliveries, depots, bestDepot);
     float bestTime = evaluatePath(bestOrder, bestDepot, depots);
     //optimization
-    for(int i = 0; i < 3; i++){
+    for(int i = 0; i < 0; i++){
         swapOrder(bestOrder, bestTime, bestDepot, deliveries, depots);
-        opt2Perturbation(bestOrder, bestTime, bestDepot, depots);
-        bestOrder = threeOptVisit(bestOrder, bestDepot, deliveries, depots);
+        opt2Perturbation(bestOrder, bestTime, bestDepot, depots);   
     }
+    bestOrder = threeOptVisit(bestOrder, bestDepot, deliveries, depots);
+
+    swapOrder(bestOrder, bestTime, bestDepot, deliveries, depots);
+    opt2Perturbation(bestOrder, bestTime, bestDepot, depots); 
+
     return buildCourierRoute(bestOrder, bestDepot, depots);
 }
 
