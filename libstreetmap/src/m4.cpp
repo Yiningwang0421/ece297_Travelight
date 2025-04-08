@@ -10,7 +10,7 @@
 #include <omp.h>
 #include <queue>
 #include <chrono>
-#define TIME_LIMIT 50
+#define TIME_LIMIT 10
 
 struct PathInfo{
     float travel_time;
@@ -357,7 +357,6 @@ std::vector<VisitNode> threeOptVisit(const std::vector<VisitNode>& order,
 
     if(n < 4) return bestOrder;
 
-    // ✅ 记录开始时间
     auto start_time = std::chrono::high_resolution_clock::now();
     const int TIME_LIMIT_MS = 35;
 
@@ -367,7 +366,6 @@ std::vector<VisitNode> threeOptVisit(const std::vector<VisitNode>& order,
             for (int j = i + 1; j < n - 1; j += N) {
                 for (int k = j + 1; k < n; k += N) {
 
-                    // ✅ 检查是否超时
                     auto now = std::chrono::high_resolution_clock::now();
                     auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(now - start_time).count();
                     if (duration > TIME_LIMIT_MS) {
@@ -375,7 +373,6 @@ std::vector<VisitNode> threeOptVisit(const std::vector<VisitNode>& order,
                         return bestOrder;
                     }
 
-                    // 路径分段
                     std::vector<VisitNode> S1(bestOrder.begin(), bestOrder.begin() + i);
                     std::vector<VisitNode> S2(bestOrder.begin() + i, bestOrder.begin() + j);
                     std::vector<VisitNode> S3(bestOrder.begin() + j, bestOrder.begin() + k);
@@ -474,10 +471,18 @@ std::vector<CourierSubPath> travelingCourier(const float turn_penalty,const std:
 //        orders[i] = {bestOrder, bestTime};
 //    }
     //optimization
-    for(int i = 0; i < 0; i++){
+    int iteration = 0;
+    while(!timeOut && iteration<100){
         swapOrder(bestOrder, bestTime, bestDepot, deliveries, depots);
-        opt2Perturbation(bestOrder, bestTime, bestDepot, depots);   
+        opt2Perturbation(bestOrder, bestTime, bestDepot, depots);
+        auto currentTime = std::chrono::high_resolution_clock::now();
+        auto wallClock = std::chrono::duration_cast<std::chrono::duration<double>> (currentTime - startTime);
+        if(wallClock.count() > 0.9 * TIME_LIMIT){
+            timeOut = true;
+        }
+        iteration++;
     }
+    return buildCourierRoute(bestOrder, bestDepot, depots);
     bestOrder = threeOptVisit(bestOrder, bestDepot, deliveries, depots); 
 
     return buildCourierRoute(bestOrder, bestDepot, depots);
